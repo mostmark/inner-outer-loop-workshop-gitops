@@ -3,7 +3,8 @@
 ---
 # Approves the InstallPlan for the pinned startingCSV of {{ $sub.name }} and nothing else.
 # Later upgrade InstallPlans stay unapproved, so the operator version only changes when
-# startingCSV changes in Git.
+# startingCSV changes in Git. It runs in the same wave as the Subscriptions: Argo CD reports a
+# Subscription with a pending InstallPlan as Progressing, so a later wave would never start.
 apiVersion: batch/v1
 kind: Job
 metadata:
@@ -14,7 +15,7 @@ metadata:
   annotations:
     argocd.argoproj.io/hook: Sync
     argocd.argoproj.io/hook-delete-policy: BeforeHookCreation
-    argocd.argoproj.io/sync-wave: "1"
+    argocd.argoproj.io/sync-wave: "0"
 spec:
   backoffLimit: 3
   activeDeadlineSeconds: 900

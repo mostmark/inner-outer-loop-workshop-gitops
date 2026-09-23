@@ -200,7 +200,8 @@ oc create secret generic workshop-user-password -n gitea \
   --dry-run=client -o yaml | oc apply -f - >/dev/null
 # Gitea administrator password: random, generated once, never printed.
 if ! oc get secret gitea-admin-password -n gitea >/dev/null 2>&1; then
-  ADMIN_PASSWORD="$(LC_ALL=C tr -dc 'A-Za-z0-9' </dev/urandom | head -c 24)"
+  # pipefail is disabled in the subshell because `head` closing the pipe makes `tr` exit with SIGPIPE.
+  ADMIN_PASSWORD="$(set +o pipefail; LC_ALL=C tr -dc 'A-Za-z0-9' </dev/urandom | head -c 24)"
   oc create secret generic gitea-admin-password -n gitea \
     --from-literal=adminPassword="${ADMIN_PASSWORD}" >/dev/null
   unset ADMIN_PASSWORD
