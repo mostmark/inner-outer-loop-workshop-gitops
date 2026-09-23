@@ -1,0 +1,147 @@
+{{- if .Values.databaseTemplates.enabled }}
+{{- $t := .Values.databaseTemplates }}
+{{- $dbs := list
+  (dict "key" "mariadb" "name" $t.mariadb.name "display" "Coolstore MariaDB (Ephemeral)" "icon" "icon-mariadb" "tags" "database,mariadb,coolstore" "image" "mariadb" "version" $t.mariadb.version "port" 3306 "mount" "/var/lib/mysql/data"
+    "params" (list
+      (dict "name" "MYSQL_USER" "displayName" "MariaDB Connection Username" "secretKey" "database-user")
+      (dict "name" "MYSQL_PASSWORD" "displayName" "MariaDB Connection Password" "secretKey" "database-password")
+      (dict "name" "MYSQL_ROOT_PASSWORD" "displayName" "MariaDB root Password" "secretKey" "database-root-password")
+      (dict "name" "MYSQL_DATABASE" "displayName" "MariaDB Database Name" "secretKey" "database-name" "value" "sampledb"))
+    "versionParam" "MARIADB_VERSION" "versionDisplay" "Version of MariaDB Image"
+    "probe" "MYSQL_PWD=\"$MYSQL_PASSWORD\" mysqladmin -u $MYSQL_USER ping")
+  (dict "key" "postgresql" "name" $t.postgresql.name "display" "Coolstore PostgreSQL (Ephemeral)" "icon" "icon-postgresql" "tags" "database,postgresql,coolstore" "image" "postgresql" "version" $t.postgresql.version "port" 5432 "mount" "/var/lib/pgsql/data"
+    "params" (list
+      (dict "name" "POSTGRESQL_USER" "displayName" "PostgreSQL Connection Username" "secretKey" "database-user")
+      (dict "name" "POSTGRESQL_PASSWORD" "displayName" "PostgreSQL Connection Password" "secretKey" "database-password")
+      (dict "name" "POSTGRESQL_DATABASE" "displayName" "PostgreSQL Database Name" "secretKey" "database-name" "value" "sampledb"))
+    "versionParam" "POSTGRESQL_VERSION" "versionDisplay" "Version of PostgreSQL Image"
+    "probe" "psql -h 127.0.0.1 -U $POSTGRESQL_USER -q -d $POSTGRESQL_DATABASE -c 'SELECT 1'")
+}}
+{{- range $db := $dbs }}
+---
+apiVersion: template.openshift.io/v1
+kind: Template
+metadata:
+  name: {{ $db.name | quote }}
+  namespace: {{ $t.namespace | quote }}
+  labels:
+    {{- include "workshop.labels" $ | nindent 4 }}
+    samples.operator.openshift.io/managed: "false"
+  annotations:
+    openshift.io/display-name: {{ $db.display | quote }}
+    description: {{ printf "%s database service without persistent storage for the Coolstore workshop. Creates a Deployment, a Service and a Secret. Data is lost when the pod restarts." $db.display | quote }}
+    iconClass: {{ $db.icon | quote }}
+    tags: {{ $db.tags | quote }}
+    openshift.io/provider-display-name: Inner & Outer Loop workshop
+message: "The database service {{ "${DATABASE_SERVICE_NAME}" }} has been created. Credentials are in the secret {{ "${DATABASE_SERVICE_NAME}" }}."
+labels:
+  template: {{ $db.name | quote }}
+objects:
+  - apiVersion: v1
+    kind: Secret
+    metadata:
+      name: "${DATABASE_SERVICE_NAME}"
+      labels:
+        app: "${DATABASE_SERVICE_NAME}"
+    stringData:
+      {{- range $p := $db.params }}
+      {{ $p.secretKey }}: {{ printf "${%s}" $p.name | quote }}
+      {{- end }}
+  - apiVersion: v1
+    kind: Service
+    metadata:
+      name: "${DATABASE_SERVICE_NAME}"
+      labels:
+        app: "${DATABASE_SERVICE_NAME}"
+    spec:
+      ports:
+        - name: {{ $db.image }}
+          port: {{ $db.port }}
+          targetPort: {{ $db.port }}
+      selector:
+        app: "${DATABASE_SERVICE_NAME}"
+  - apiVersion: apps/v1
+    kind: Deployment
+    metadata:
+      name: "${DATABASE_SERVICE_NAME}"
+      labels:
+        app: "${DATABASE_SERVICE_NAME}"
+        app.kubernetes.io/name: {{ $db.image }}
+      annotations:
+        image.openshift.io/triggers: {{ printf "[{\"from\":{\"kind\":\"ImageStreamTag\",\"name\":\"%s:${%s}\",\"namespace\":\"${NAMESPACE}\"},\"fieldPath\":\"spec.template.spec.containers[?(@.name==\\\"%s\\\")].image\"}]" $db.image $db.versionParam $db.image | quote }}
+    spec:
+      replicas: 1
+      strategy:
+        type: Recreate
+      selector:
+        matchLabels:
+          app: "${DATABASE_SERVICE_NAME}"
+      template:
+        metadata:
+          labels:
+            app: "${DATABASE_SERVICE_NAME}"
+        spec:
+          containers:
+            - name: {{ $db.image }}
+              image: " "
+              ports:
+                - containerPort: {{ $db.port }}
+              env:
+                {{- range $p := $db.params }}
+                - name: {{ $p.name }}
+                  valueFrom:
+                    secretKeyRef:
+                      name: "${DATABASE_SERVICE_NAME}"
+                      key: {{ $p.secretKey }}
+                {{- end }}
+              readinessProbe:
+                exec:
+                  command: ["/bin/sh", "-i", "-c", {{ $db.probe | quote }}]
+                initialDelaySeconds: 5
+                timeoutSeconds: 1
+              livenessProbe:
+                tcpSocket:
+                  port: {{ $db.port }}
+                initialDelaySeconds: 30
+                timeoutSeconds: 1
+              resources:
+                limits:
+                  memory: "${MEMORY_LIMIT}"
+              volumeMounts:
+                - name: data
+                  mountPath: {{ $db.mount }}
+          volumes:
+            - name: data
+              emptyDir: {}
+parameters:
+  - name: MEMORY_LIMIT
+    displayName: Memory Limit
+    description: Maximum amount of memory the container can use.
+    value: 512Mi
+    required: true
+  - name: NAMESPACE
+    displayName: Namespace
+    description: The OpenShift namespace where the image stream resides.
+    value: openshift
+  - name: DATABASE_SERVICE_NAME
+    displayName: Database Service Name
+    description: The name of the OpenShift Service exposed for the database.
+    value: {{ $db.image }}
+    required: true
+  {{- range $p := $db.params }}
+  - name: {{ $p.name }}
+    displayName: {{ $p.displayName | quote }}
+    {{- if $p.value }}
+    value: {{ $p.value | quote }}
+    {{- else }}
+    generate: expression
+    from: "[a-zA-Z0-9]{16}"
+    {{- end }}
+    required: true
+  {{- end }}
+  - name: {{ $db.versionParam }}
+    displayName: {{ $db.versionDisplay | quote }}
+    value: {{ $db.version | quote }}
+    required: true
+{{- end }}
+{{- end }}

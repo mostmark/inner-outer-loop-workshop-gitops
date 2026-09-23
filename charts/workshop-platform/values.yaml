@@ -102,3 +102,18 @@ pipelines:
   # Console plugins to enable (the Pipeline builder lives in the Pipelines plugin).
   consolePlugins:
     - pipelines-console-plugin
+
+# Database templates for the Inner Loop "Externalize Application Configuration" module. The
+# OpenShift mariadb-ephemeral/postgresql-ephemeral templates still create DeploymentConfigs
+# (deprecated) and default to EOL versions; these keep the same parameters but create a
+# Deployment, Service and Secret. Installed in the `openshift` namespace so they show up in every
+# participant's Software Catalog.
+databaseTemplates:
+  enabled: true
+  namespace: openshift
+  mariadb:
+    name: coolstore-mariadb
+    version: 10.5-el9
+  postgresql:
+    name: coolstore-postgresql
+    version: 15-el9
