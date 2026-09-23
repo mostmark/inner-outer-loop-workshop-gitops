@@ -1,6 +1,6 @@
 apiVersion: v2
 name: lab-guide
-description: placeholder
+description: Lab guide (Antora site served by httpd) of the Inner & Outer Loop workshop.
 type: application
 version: 0.1.0
 appVersion: "1.0"

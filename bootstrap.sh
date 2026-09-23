@@ -239,7 +239,7 @@ print_url_template() {
   echo
   echo "============================================"
   echo "Lab guide URL template:"
-  echo "https://${host:-<lab-guide-route-host>}?OPENSHIFT_USERNAME={username}&OPENSHIFT_PASSWORD={openshift_password}&OPENSHIFT_CONSOLE_URL={openshift_console_hostname}&OPENSHIFT_API_URL={openshift_api_host_port}"
+  echo "https://${host:-<lab-guide-route-host>}?OPENSHIFT_USERNAME={username}&OPENSHIFT_PASSWORD={openshift_password}&OPENSHIFT_CONSOLE_URL={openshift_console_hostname}&OPENSHIFT_API_URL={openshift_api_url}"
   echo
   echo "Print ready-to-use URLs for every participant with:"
   echo "  WORKSHOP_USER_PASSWORD=... ${SCRIPT_DIR}/print-user-urls.sh"

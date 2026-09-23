@@ -1,0 +1,73 @@
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: {{ .Values.labGuide.namespace | quote }}
+  labels:
+    {{- include "workshop.labels" . | nindent 4 }}
+  annotations:
+    openshift.io/display-name: Lab guide application
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: lab-guide
+  namespace: {{ .Values.labGuide.namespace | quote }}
+  labels:
+    {{- include "workshop.labels" . | nindent 4 }}
+    app: lab-guide
+spec:
+  replicas: {{ .Values.labGuide.replicas }}
+  selector:
+    matchLabels:
+      app: lab-guide
+  template:
+    metadata:
+      labels:
+        app: lab-guide
+    spec:
+      containers:
+        - name: lab-guide
+          image: {{ .Values.labGuide.image | quote }}
+          imagePullPolicy: {{ .Values.labGuide.imagePullPolicy | quote }}
+          ports:
+            - containerPort: 8080
+          readinessProbe:
+            httpGet:
+              path: /
+              port: 8080
+          resources:
+            {{- toYaml .Values.labGuide.resources | nindent 12 }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: lab-guide
+  namespace: {{ .Values.labGuide.namespace | quote }}
+  labels:
+    {{- include "workshop.labels" . | nindent 4 }}
+spec:
+  ports:
+    - name: 8080-tcp
+      protocol: TCP
+      port: 8080
+      targetPort: 8080
+  selector:
+    app: lab-guide
+---
+apiVersion: route.openshift.io/v1
+kind: Route
+metadata:
+  name: {{ .Values.labGuide.route.name | quote }}
+  namespace: {{ .Values.labGuide.namespace | quote }}
+  labels:
+    {{- include "workshop.labels" . | nindent 4 }}
+spec:
+  tls:
+    insecureEdgeTerminationPolicy: {{ .Values.labGuide.route.tls.insecureEdgeTerminationPolicy | quote }}
+    termination: {{ .Values.labGuide.route.tls.termination | quote }}
+  port:
+    targetPort: 8080-tcp
+  to:
+    kind: Service
+    name: lab-guide

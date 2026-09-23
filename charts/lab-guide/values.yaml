@@ -1,4 +1,22 @@
+# Passed in by the root chart; not used by this chart.
 users:
   count: 10
   prefix: user
   explicitNames: []
+
+labGuide:
+  namespace: lab-guide
+  image: quay.io/mostmark/inner-outer-loop-lab:latest
+  imagePullPolicy: Always
+  replicas: 1
+  resources:
+    requests:
+      cpu: 10m
+      memory: 64Mi
+    limits:
+      memory: 256Mi
+  route:
+    name: doc
+    tls:
+      termination: edge
+      insecureEdgeTerminationPolicy: Redirect

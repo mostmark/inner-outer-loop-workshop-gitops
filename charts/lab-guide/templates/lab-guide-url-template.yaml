@@ -1,0 +1,12 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: lab-guide-url-template
+  namespace: {{ .Values.labGuide.namespace | quote }}
+  labels:
+    {{- include "workshop.labels" . | nindent 4 }}
+data:
+  # {openshift_console_hostname}: console host without scheme, e.g. console-openshift-console.apps.example.com
+  # {openshift_api_url}: API host and port without scheme, e.g. api.example.com:6443
+  # The lab guide derives the apps domain from the console host name.
+  url-template: "https://<lab-guide-route-host>?OPENSHIFT_USERNAME={username}&OPENSHIFT_PASSWORD={openshift_password}&OPENSHIFT_CONSOLE_URL={openshift_console_hostname}&OPENSHIFT_API_URL={openshift_api_url}"
