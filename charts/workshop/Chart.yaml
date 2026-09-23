@@ -1,0 +1,6 @@
+apiVersion: v2
+name: workshop
+description: App-of-apps root chart for the Inner & Outer Loop workshop. Renders one Argo CD Application per component chart.
+type: application
+version: 0.1.0
+appVersion: "1.0"

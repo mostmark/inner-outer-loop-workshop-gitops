@@ -1,0 +1,22 @@
+{{- range $key, $cs := .Values.catalogSources }}
+{{- if $cs.enabled }}
+---
+apiVersion: operators.coreos.com/v1alpha1
+kind: CatalogSource
+metadata:
+  name: {{ $cs.name | quote }}
+  namespace: {{ $cs.namespace | quote }}
+  labels:
+    {{- include "workshop.labels" $ | nindent 4 }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "-1"
+    argocd.argoproj.io/sync-options: Delete=false
+spec:
+  sourceType: grpc
+  image: {{ $cs.image | quote }}
+  displayName: {{ $cs.displayName | quote }}
+  publisher: {{ $cs.publisher | quote }}
+  grpcPodConfig:
+    securityContextConfig: restricted
+{{- end }}
+{{- end }}

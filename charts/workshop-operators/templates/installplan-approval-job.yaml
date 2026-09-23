@@ -1,0 +1,59 @@
+{{- range $sub := include "workshop.enabledSubscriptions" . | fromYamlArray }}
+{{- if and (eq $sub.installPlanApproval "Manual") $sub.startingCSV }}
+---
+# Approves the InstallPlan for the pinned startingCSV of {{ $sub.name }} and nothing else.
+# Later upgrade InstallPlans stay unapproved, so the operator version only changes when
+# startingCSV changes in Git.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ printf "approve-%s" $sub.name | quote }}
+  namespace: {{ $.Values.setupNamespace | quote }}
+  labels:
+    {{- include "workshop.labels" $ | nindent 4 }}
+  annotations:
+    argocd.argoproj.io/hook: Sync
+    argocd.argoproj.io/hook-delete-policy: BeforeHookCreation
+    argocd.argoproj.io/sync-wave: "1"
+spec:
+  backoffLimit: 3
+  activeDeadlineSeconds: 900
+  template:
+    spec:
+      serviceAccountName: operator-readiness
+      restartPolicy: OnFailure
+      containers:
+        - name: approve
+          image: {{ $.Values.jobImage | quote }}
+          env:
+            - name: NAMESPACE
+              value: {{ $sub.namespace | quote }}
+            - name: CSV
+              value: {{ $sub.startingCSV | quote }}
+          command: ["/bin/bash", "-c"]
+          args:
+            - |
+              set -euo pipefail
+              for i in $(seq 1 90); do
+                if oc get csv "$CSV" -n "$NAMESPACE" >/dev/null 2>&1; then
+                  echo "$CSV is already installed"; exit 0
+                fi
+                plan=$(oc get installplan -n "$NAMESPACE" --no-headers \
+                  -o custom-columns=NAME:.metadata.name,CSVS:.spec.clusterServiceVersionNames,APPROVED:.spec.approved \
+                  | awk -v csv="$CSV" 'index($2, csv) && $3 == "false" {print $1; exit}')
+                if [ -n "$plan" ]; then
+                  echo "Approving InstallPlan $plan for $CSV"
+                  oc patch installplan "$plan" -n "$NAMESPACE" --type merge -p '{"spec":{"approved":true}}'
+                  exit 0
+                fi
+                echo "Waiting for an InstallPlan for $CSV ($i/90)"; sleep 10
+              done
+              echo "No InstallPlan for $CSV appeared"; exit 1
+          resources:
+            requests:
+              cpu: 10m
+              memory: 64Mi
+            limits:
+              memory: 256Mi
+{{- end }}
+{{- end }}

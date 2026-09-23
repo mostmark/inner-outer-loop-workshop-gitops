@@ -1,0 +1,46 @@
+{{- $valueKeys := dict "operators" "operators" "platform" "platform" "users" "workshopUsers" "labGuide" "labGuide" -}}
+{{- range $key := list "operators" "platform" "users" "labGuide" }}
+{{- $component := index $.Values.components $key }}
+{{- if $component.enabled }}
+---
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: {{ printf "workshop-%s" ($component.chart | trimPrefix "workshop-") | quote }}
+  namespace: {{ $.Values.argocd.namespace | quote }}
+  labels:
+    {{- include "workshop.labels" $ | nindent 4 }}
+  annotations:
+    argocd.argoproj.io/sync-wave: {{ $component.syncWave | quote }}
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: {{ $.Values.argocd.project | quote }}
+  source:
+    repoURL: {{ $.Values.source.repoURL | quote }}
+    targetRevision: {{ $.Values.source.targetRevision | quote }}
+    path: {{ printf "charts/%s" $component.chart | quote }}
+    helm:
+      valuesObject:
+        {{- include "workshop.componentValues" (list $ (index $.Values (index $valueKeys $key))) | nindent 8 }}
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: {{ $component.destinationNamespace | quote }}
+  {{- with $component.ignoreDifferences }}
+  ignoreDifferences:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=false
+      - PrunePropagationPolicy=foreground
+      - PruneLast=true
+      - SkipDryRunOnMissingResource=true
+      - RespectIgnoreDifferences=true
+    retry:
+      {{- toYaml $.Values.retry | nindent 6 }}
+{{- end }}
+{{- end }}

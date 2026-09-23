@@ -1,0 +1,6 @@
+.DS_Store
+*.swp
+*.tmp
+
+# Working notes of the migration (consolidated into migration/*.md)
+migration/drafts/

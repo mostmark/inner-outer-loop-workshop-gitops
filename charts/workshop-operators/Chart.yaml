@@ -1,0 +1,6 @@
+apiVersion: v2
+name: workshop-operators
+description: OLM Subscriptions (and supporting OperatorGroups/CatalogSources) for every operator the Inner & Outer Loop workshop needs.
+type: application
+version: 0.1.0
+appVersion: "1.0"

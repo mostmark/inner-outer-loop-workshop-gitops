@@ -1,0 +1,79 @@
+# Passed in by the root chart; not used by this chart.
+users:
+  count: 10
+  prefix: user
+  explicitNames: []
+
+# Namespace for the provisioning helper Jobs (operator readiness checks, InstallPlan approval).
+setupNamespace: workshop-setup
+# Image for the helper Jobs. The `cli` image stream ships with every OpenShift cluster and matches
+# the cluster version; it contains bash, oc and coreutils.
+jobImage: image-registry.openshift-image-registry.svc:5000/openshift/cli:latest
+# How long the readiness Job waits for all operators before failing (Argo CD then retries).
+waitTimeoutSeconds: 1500
+
+# Every channel is pinned explicitly and was verified against the OpenShift 4.22 catalog
+# (`oc get packagemanifest <package> -o yaml`). See migration/DECISIONS.md.
+subscriptions:
+  devspaces:
+    enabled: true
+    name: devspaces
+    package: devspaces
+    channel: stable
+    namespace: openshift-operators
+    source: redhat-operators
+    sourceNamespace: openshift-marketplace
+    installPlanApproval: Automatic
+  pipelines:
+    enabled: true
+    name: openshift-pipelines-operator-rh
+    package: openshift-pipelines-operator-rh
+    channel: pipelines-1.24
+    namespace: openshift-operators
+    source: redhat-operators
+    sourceNamespace: openshift-marketplace
+    installPlanApproval: Automatic
+  serviceMesh:
+    enabled: true
+    name: servicemeshoperator3
+    package: servicemeshoperator3
+    channel: stable-3.4
+    namespace: openshift-operators
+    source: redhat-operators
+    sourceNamespace: openshift-marketplace
+    installPlanApproval: Automatic
+  # Kiali only has a `stable` channel. Because OLM once auto-upgraded Kiali to a version that no
+  # longer matched the mesh, the operator runs in its own namespace with Manual approval and a
+  # pinned startingCSV. A Job approves exactly that CSV and nothing else.
+  kiali:
+    enabled: true
+    name: kiali-ossm
+    package: kiali-ossm
+    channel: stable
+    namespace: kiali-operator
+    ownNamespace: true
+    source: redhat-operators
+    sourceNamespace: openshift-marketplace
+    installPlanApproval: Manual
+    startingCSV: kiali-operator.v2.27.4
+  # Maintained Gitea operator from the Red Hat Demo Platform team (github.com/rhpds/gitea-operator).
+  gitea:
+    enabled: true
+    name: gitea-operator
+    package: gitea-operator
+    channel: stable
+    namespace: gitea-operator
+    ownNamespace: true
+    source: gitea-operator-catalog
+    sourceNamespace: gitea-operator
+    installPlanApproval: Automatic
+
+catalogSources:
+  gitea:
+    enabled: true
+    name: gitea-operator-catalog
+    namespace: gitea-operator
+    # Pinned catalog tag, so the Gitea operator version only changes when this value changes.
+    image: quay.io/rhpds/gitea-catalog:v2.3.2
+    displayName: Gitea Operator (Red Hat Demo Platform)
+    publisher: Red Hat Demo Platform

@@ -1,0 +1,64 @@
+---
+# Argo CD's built-in Subscription health only reflects OLM resolution, not whether the operator's
+# CSV has finished installing. This Job runs as the last Sync hook of the operators Application and
+# succeeds only when every Subscription has an installed CSV in phase Succeeded (including
+# dependencies OLM added, such as the DevWorkspace operator). The platform Application waits for it.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: wait-for-operators
+  namespace: {{ .Values.setupNamespace | quote }}
+  labels:
+    {{- include "workshop.labels" . | nindent 4 }}
+  annotations:
+    argocd.argoproj.io/hook: Sync
+    argocd.argoproj.io/hook-delete-policy: BeforeHookCreation
+    argocd.argoproj.io/sync-wave: "5"
+spec:
+  backoffLimit: 1
+  activeDeadlineSeconds: {{ add .Values.waitTimeoutSeconds 120 }}
+  template:
+    spec:
+      serviceAccountName: operator-readiness
+      restartPolicy: Never
+      containers:
+        - name: wait
+          image: {{ .Values.jobImage | quote }}
+          env:
+            - name: SUBSCRIPTIONS
+              value: {{ range $sub := include "workshop.enabledSubscriptions" . | fromYamlArray }}{{ printf "%s/%s " $sub.namespace $sub.name }}{{ end }}
+            - name: TIMEOUT
+              value: {{ .Values.waitTimeoutSeconds | quote }}
+          command: ["/bin/bash", "-c"]
+          args:
+            - |
+              set -uo pipefail
+              deadline=$((SECONDS + TIMEOUT))
+              namespaces=""
+              for entry in $SUBSCRIPTIONS; do
+                ns=${entry%%/*}; name=${entry#*/}
+                namespaces="$namespaces $ns"
+                while true; do
+                  csv=$(oc get subscriptions.operators.coreos.com "$name" -n "$ns" -o jsonpath='{.status.installedCSV}' 2>/dev/null)
+                  phase=""
+                  [ -n "$csv" ] && phase=$(oc get csv "$csv" -n "$ns" -o jsonpath='{.status.phase}' 2>/dev/null)
+                  if [ "$phase" = "Succeeded" ]; then echo "OK   $ns/$name -> $csv"; break; fi
+                  if [ $SECONDS -ge $deadline ]; then echo "FAIL $ns/$name csv='$csv' phase='$phase'"; exit 1; fi
+                  echo "wait $ns/$name csv='$csv' phase='$phase'"; sleep 15
+                done
+              done
+              # Dependencies resolved by OLM (e.g. devworkspace-operator) must be ready as well.
+              for ns in $(echo $namespaces | tr ' ' '\n' | sort -u); do
+                while true; do
+                  pending=$(oc get csv -n "$ns" --no-headers -o custom-columns=NAME:.metadata.name,PHASE:.status.phase 2>/dev/null | awk '$2 != "Succeeded"')
+                  if [ -z "$pending" ]; then echo "OK   all CSVs in $ns Succeeded"; break; fi
+                  if [ $SECONDS -ge $deadline ]; then echo "FAIL CSVs in $ns: $pending"; exit 1; fi
+                  echo "wait CSVs in $ns: $pending"; sleep 15
+                done
+              done
+          resources:
+            requests:
+              cpu: 10m
+              memory: 64Mi
+            limits:
+              memory: 256Mi

@@ -1,0 +1,88 @@
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: {{ .Values.setupNamespace | quote }}
+  labels:
+    {{- include "workshop.labels" . | nindent 4 }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "-3"
+    openshift.io/display-name: Workshop provisioning jobs
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: operator-readiness
+  namespace: {{ .Values.setupNamespace | quote }}
+  labels:
+    {{- include "workshop.labels" . | nindent 4 }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "-3"
+---
+# Read-only access to OLM objects, used to wait for operators to finish installing.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: workshop-operator-readiness
+  labels:
+    {{- include "workshop.labels" . | nindent 4 }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "-3"
+rules:
+  - apiGroups: ["operators.coreos.com"]
+    resources: ["subscriptions", "clusterserviceversions", "installplans"]
+    verbs: ["get", "list", "watch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: workshop-operator-readiness
+  labels:
+    {{- include "workshop.labels" . | nindent 4 }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "-3"
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: workshop-operator-readiness
+subjects:
+  - kind: ServiceAccount
+    name: operator-readiness
+    namespace: {{ .Values.setupNamespace | quote }}
+{{- range $sub := include "workshop.enabledSubscriptions" . | fromYamlArray }}
+{{- if eq $sub.installPlanApproval "Manual" }}
+---
+# Allows the approval Job to approve InstallPlans in {{ $sub.namespace }} only.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: workshop-installplan-approver
+  namespace: {{ $sub.namespace | quote }}
+  labels:
+    {{- include "workshop.labels" $ | nindent 4 }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "-1"
+rules:
+  - apiGroups: ["operators.coreos.com"]
+    resources: ["installplans"]
+    verbs: ["get", "list", "patch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: workshop-installplan-approver
+  namespace: {{ $sub.namespace | quote }}
+  labels:
+    {{- include "workshop.labels" $ | nindent 4 }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "-1"
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: workshop-installplan-approver
+subjects:
+  - kind: ServiceAccount
+    name: operator-readiness
+    namespace: {{ $.Values.setupNamespace | quote }}
+{{- end }}
+{{- end }}

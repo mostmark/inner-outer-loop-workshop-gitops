@@ -1,0 +1,44 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: inner-outer-loop-workshop
+  namespace: openshift-gitops
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/mostmark/inner-outer-loop-workshop-gitops.git
+    targetRevision: main
+    path: charts/workshop
+    helm:
+      valueFiles:
+        - values.yaml
+      parameters:
+        - name: users.count
+          value: "10"
+        - name: users.prefix
+          value: user
+        - name: users.explicitNames
+          value: "null"
+        - name: source.repoURL
+          value: https://github.com/mostmark/inner-outer-loop-workshop-gitops.git
+        - name: source.targetRevision
+          value: main
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: openshift-gitops
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=false
+      - PrunePropagationPolicy=foreground
+      - PruneLast=true
+    retry:
+      limit: 20
+      backoff:
+        duration: 30s
+        factor: 2
+        maxDuration: 5m

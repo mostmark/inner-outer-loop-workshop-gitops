@@ -1,0 +1,65 @@
+users:
+  # Generated users are named <prefix><number>, for example user1..user10.
+  count: 10
+  prefix: user
+  # When explicitNames is non-empty, it is used instead of count/prefix.
+  explicitNames: []
+
+# Git source of the component charts. bootstrap.sh overrides repoURL/targetRevision when needed.
+source:
+  repoURL: https://github.com/mostmark/inner-outer-loop-workshop-gitops.git
+  targetRevision: main
+
+# The provisioning Argo CD instance (admin only).
+argocd:
+  namespace: openshift-gitops
+  project: default
+
+# Retry policy for every child Application. Operators can take several minutes to become ready,
+# so later waves retry with exponential backoff instead of failing the sync.
+retry:
+  limit: 20
+  backoff:
+    duration: 30s
+    factor: 2
+    maxDuration: 5m
+
+# One Argo CD Application per component. syncWave orders them inside the root Application; a
+# custom Application health check (installed by bootstrap.sh) makes each wave wait until the
+# previous child Application is Synced and Healthy.
+components:
+  operators:
+    enabled: true
+    chart: workshop-operators
+    syncWave: "0"
+    destinationNamespace: openshift-operators
+    ignoreDifferences:
+      - group: operators.coreos.com
+        kind: Subscription
+        jsonPointers:
+          - /spec/config
+  platform:
+    enabled: true
+    chart: workshop-platform
+    syncWave: "1"
+    destinationNamespace: openshift-gitops
+    ignoreDifferences: []
+  users:
+    enabled: true
+    chart: workshop-users
+    syncWave: "2"
+    destinationNamespace: openshift-gitops
+    ignoreDifferences: []
+  labGuide:
+    enabled: true
+    chart: lab-guide
+    syncWave: "0"
+    destinationNamespace: lab-guide
+    ignoreDifferences: []
+
+# Values passed through to the component charts. Each chart's own values.yaml holds the defaults;
+# anything set here is merged on top. `users` is always passed to every component.
+operators: {}
+platform: {}
+workshopUsers: {}
+labGuide: {}

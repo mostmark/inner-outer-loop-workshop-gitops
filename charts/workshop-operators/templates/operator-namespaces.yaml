@@ -1,0 +1,36 @@
+{{- /*
+Operators that cannot live in openshift-operators get their own namespace + OperatorGroup.
+These objects carry Delete=false: removing an operator's namespace while Argo CD is still
+deleting that operator's custom resources would leave finalizers hanging. cleanup.sh removes them
+after the workshop resources are gone.
+*/}}
+{{- $seen := dict -}}
+{{- range $sub := include "workshop.enabledSubscriptions" . | fromYamlArray }}
+{{- if and $sub.ownNamespace (not (hasKey $seen $sub.namespace)) }}
+{{- $_ := set $seen $sub.namespace true }}
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: {{ $sub.namespace | quote }}
+  labels:
+    {{- include "workshop.labels" $ | nindent 4 }}
+    openshift.io/cluster-monitoring: "true"
+  annotations:
+    argocd.argoproj.io/sync-wave: "-2"
+    argocd.argoproj.io/sync-options: Delete=false
+---
+apiVersion: operators.coreos.com/v1
+kind: OperatorGroup
+metadata:
+  name: {{ $sub.namespace | quote }}
+  namespace: {{ $sub.namespace | quote }}
+  labels:
+    {{- include "workshop.labels" $ | nindent 4 }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "-1"
+    argocd.argoproj.io/sync-options: Delete=false
+spec:
+  upgradeStrategy: Default
+{{- end }}
+{{- end }}
