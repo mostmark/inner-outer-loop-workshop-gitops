@@ -1,6 +1,6 @@
 apiVersion: v2
 name: workshop-users
-description: placeholder
+description: Per-user resources for the Inner & Outer Loop workshop (projects, RBAC, Dev Spaces workspaces, Argo CD projects, Gitea accounts, credentials).
 type: application
 version: 0.1.0
 appVersion: "1.0"

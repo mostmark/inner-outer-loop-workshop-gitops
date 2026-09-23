@@ -1,0 +1,45 @@
+{{- $users := include "workshop.users" . | fromYamlArray -}}
+{{- range $user := $users }}
+---
+# Inner Loop development project.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: {{ printf "my-project-%s" $user | quote }}
+  labels:
+    {{- include "workshop.labels" $ | nindent 4 }}
+    workshop.redhat.com/user: {{ $user | quote }}
+  annotations:
+    openshift.io/display-name: {{ printf "Inner Loop - %s" $user | quote }}
+    openshift.io/requester: {{ $user | quote }}
+---
+# Outer Loop staging project: deployed by the participant's Argo CD and part of the service mesh.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: {{ printf "cn-project-%s" $user | quote }}
+  labels:
+    {{- include "workshop.labels" $ | nindent 4 }}
+    workshop.redhat.com/user: {{ $user | quote }}
+    argocd.argoproj.io/managed-by: {{ $.Values.argocd.namespace | quote }}
+    {{ $.Values.serviceMesh.discoveryLabel.key }}: {{ $.Values.serviceMesh.discoveryLabel.value | quote }}
+  annotations:
+    openshift.io/display-name: {{ printf "Outer Loop - %s" $user | quote }}
+    openshift.io/requester: {{ $user | quote }}
+---
+# Dev Spaces namespace, pre-created with the labels and annotation Dev Spaces uses to find a
+# user's namespace (CheCluster namespace template devspaces-<username>).
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: {{ printf "devspaces-%s" $user | quote }}
+  labels:
+    {{- include "workshop.labels" $ | nindent 4 }}
+    workshop.redhat.com/user: {{ $user | quote }}
+    app.kubernetes.io/part-of: che.eclipse.org
+    app.kubernetes.io/component: workspaces-namespace
+  annotations:
+    che.eclipse.org/username: {{ $user | quote }}
+    openshift.io/display-name: {{ printf "Dev Spaces - %s" $user | quote }}
+    openshift.io/requester: {{ $user | quote }}
+{{- end }}

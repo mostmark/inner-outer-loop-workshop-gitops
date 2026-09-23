@@ -1,26 +1,3 @@
-{{- if .Values.pipelines.javaBuilderTag.enabled }}
-{{- $t := .Values.pipelines.javaBuilderTag }}
----
-# The s2i-java Task from openshift-pipelines builds from openshift/java:<VERSION>. OpenShift 4.22
-# no longer ships a Java 21 tag in that image stream, so the workshop adds one. The Samples
-# operator leaves extra tags alone.
-apiVersion: image.openshift.io/v1
-kind: ImageStreamTag
-metadata:
-  name: {{ printf "java:%s" $t.name | quote }}
-  namespace: openshift
-  labels:
-    {{- include "workshop.labels" . | nindent 4 }}
-tag:
-  name: {{ $t.name | quote }}
-  from:
-    kind: DockerImage
-    name: {{ $t.image | quote }}
-  importPolicy:
-    importMode: Legacy
-  referencePolicy:
-    type: Local
-{{- end }}
 {{- with .Values.pipelines.consolePlugins }}
 ---
 apiVersion: v1
@@ -46,6 +23,35 @@ rules:
     resources: ["consoleplugins"]
     verbs: ["get", "list"]
 ---
+# Allows adding the Java 21 builder tag to openshift/java.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: workshop-java-builder-tag
+  namespace: openshift
+  labels:
+    {{- include "workshop.labels" $ | nindent 4 }}
+rules:
+  - apiGroups: ["image.openshift.io"]
+    resources: ["imagestreams", "imagestreamtags", "imagestreamimports"]
+    verbs: ["get", "list", "create", "update", "patch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: workshop-java-builder-tag
+  namespace: openshift
+  labels:
+    {{- include "workshop.labels" $ | nindent 4 }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: workshop-java-builder-tag
+subjects:
+  - kind: ServiceAccount
+    name: console-plugins
+    namespace: {{ $.Values.setupNamespace | quote }}
+---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
 metadata:
@@ -61,13 +67,18 @@ subjects:
     name: console-plugins
     namespace: {{ $.Values.setupNamespace | quote }}
 ---
-# Operators install their ConsolePlugin objects, but a plugin is only active once it is listed in
-# the cluster Console configuration. That list is shared with other plugins, so it is not managed
-# as a whole by Argo CD: this Job only appends the missing workshop plugins.
+# Small additions to objects that belong to the cluster, so Argo CD cannot own them as a whole:
+#   - Operators install their ConsolePlugin objects, but a plugin is only active once it is listed
+#     in the cluster Console configuration (shared with other plugins). The Job appends the
+#     missing workshop plugins.
+#   - The openshift-pipelines s2i-java Task builds from openshift/java:<VERSION>. OpenShift 4.22
+#     no longer ships a Java 21 tag in that image stream (owned by the Samples operator, which
+#     leaves extra tags alone), so the Job adds one. ImageStreamTags cannot carry Argo CD's
+#     tracking labels, which is why this is not a plain manifest.
 apiVersion: batch/v1
 kind: Job
 metadata:
-  name: enable-console-plugins
+  name: cluster-integration
   namespace: {{ $.Values.setupNamespace | quote }}
   labels:
     {{- include "workshop.labels" $ | nindent 4 }}
@@ -88,6 +99,10 @@ spec:
           env:
             - name: PLUGINS
               value: {{ join " " . | quote }}
+            - name: JAVA_TAG
+              value: {{ if $.Values.pipelines.javaBuilderTag.enabled }}{{ $.Values.pipelines.javaBuilderTag.name | quote }}{{ else }}""{{ end }}
+            - name: JAVA_IMAGE
+              value: {{ $.Values.pipelines.javaBuilderTag.image | quote }}
           command: ["/bin/bash", "-c"]
           args:
             - |
@@ -103,6 +118,9 @@ spec:
                   oc patch consoles.operator.openshift.io cluster --type json -p "[{\"op\":\"add\",\"path\":\"/spec/plugins/-\",\"value\":\"$plugin\"}]"
                 fi
               done
+              if [ -n "$JAVA_TAG" ]; then
+                oc tag --source=docker "$JAVA_IMAGE" "openshift/java:$JAVA_TAG" --reference-policy=local
+              fi
           resources:
             requests:
               cpu: 10m

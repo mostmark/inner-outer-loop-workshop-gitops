@@ -49,7 +49,12 @@ components:
     chart: workshop-users
     syncWave: "2"
     destinationNamespace: openshift-gitops
-    ignoreDifferences: []
+    ignoreDifferences:
+      # Participants may stop and restart their workspace from the Dev Spaces dashboard.
+      - group: workspace.devfile.io
+        kind: DevWorkspace
+        jsonPointers:
+          - /spec/started
   labGuide:
     enabled: true
     chart: lab-guide

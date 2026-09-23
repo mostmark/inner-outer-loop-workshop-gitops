@@ -1,0 +1,138 @@
+{{- $users := include "workshop.users" . | fromYamlArray -}}
+{{- $ds := .Values.devspaces -}}
+{{- range $user := $users }}
+{{- $ns := printf "devspaces-%s" $user }}
+---
+# Per-user values for devfile commands and scripts, mounted as environment variables into every
+# container of the participant's workspaces (including workspaces they create themselves).
+# Secrets (password, Argo CD token, Git credentials) are created by the user-setup Job.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: workshop-env
+  namespace: {{ $ns | quote }}
+  labels:
+    {{- include "workshop.labels" $ | nindent 4 }}
+    controller.devfile.io/mount-to-devworkspace: "true"
+    controller.devfile.io/watch-configmap: "true"
+  annotations:
+    controller.devfile.io/mount-as: env
+data:
+  WORKSHOP_USER: {{ $user | quote }}
+  WORKSHOP_DEV_PROJECT: {{ printf "my-project-%s" $user | quote }}
+  WORKSHOP_STAGING_PROJECT: {{ printf "cn-project-%s" $user | quote }}
+  WORKSHOP_GITEA_URL: {{ $.Values.gitea.url | quote }}
+  MAVEN_MIRROR_URL: {{ $.Values.mavenMirrorURL | quote }}
+  ARGOCD_SERVER: {{ $.Values.argocd.server | quote }}
+  ARGOCD_OPTS: "--plaintext"
+  GIT_AUTHOR_NAME: {{ $user | quote }}
+  GIT_AUTHOR_EMAIL: {{ printf "%s@example.com" $user | quote }}
+  GIT_COMMITTER_NAME: {{ $user | quote }}
+  GIT_COMMITTER_EMAIL: {{ printf "%s@example.com" $user | quote }}
+---
+# VS Code editor for the pre-created workspace (the Dev Spaces dashboard creates the same object
+# when a workspace is started from a factory link).
+apiVersion: workspace.devfile.io/v1alpha2
+kind: DevWorkspaceTemplate
+metadata:
+  name: {{ printf "che-code-%s" $ds.workspaceName | quote }}
+  namespace: {{ $ns | quote }}
+  labels:
+    {{- include "workshop.labels" $ | nindent 4 }}
+spec:
+  commands:
+    - id: init-container-command
+      apply:
+        component: che-code-injector
+    - id: init-che-code-command
+      exec:
+        component: che-code-runtime-description
+        commandLine: nohup /checode/entrypoint-volume.sh > /checode/entrypoint-logs.txt 2>&1 &
+  components:
+    - name: che-code-injector
+      container:
+        image: {{ $ds.editor.injectorImage | quote }}
+        command:
+          - /entrypoint-init-container.sh
+        cpuLimit: 500m
+        cpuRequest: 30m
+        memoryLimit: 256Mi
+        memoryRequest: 32Mi
+        volumeMounts:
+          - name: checode
+            path: /checode
+    - name: che-code-runtime-description
+      attributes:
+        app.kubernetes.io/component: che-code-runtime
+        app.kubernetes.io/part-of: che-code.eclipse.org
+        controller.devfile.io/container-contribution: true
+      container:
+        image: {{ $ds.editor.runtimeImage | quote }}
+        cpuLimit: 500m
+        cpuRequest: 30m
+        memoryLimit: 1024Mi
+        memoryRequest: 256Mi
+        endpoints:
+          - name: che-code
+            attributes:
+              cookiesAuthEnabled: true
+              discoverable: false
+              type: main
+              urlRewriteSupported: true
+            exposure: public
+            protocol: https
+            secure: true
+            targetPort: 3100
+          {{- range $i := list 1 2 3 }}
+          - name: {{ printf "code-redirect-%d" $i }}
+            attributes:
+              discoverable: false
+              urlRewriteSupported: false
+            exposure: public
+            protocol: https
+            targetPort: {{ add 13130 $i }}
+          {{- end }}
+        volumeMounts:
+          - name: checode
+            path: /checode
+    - name: checode
+      volume: {}
+  events:
+    preStart:
+      - init-container-command
+    postStart:
+      - init-che-code-command
+---
+# The participant's workspace, built from the devfile in the code repository (parent URI), so the
+# devfile is not duplicated here. Argo CD only sets spec.started initially (see ignoreDifferences
+# of the users Application), so participants can stop and restart it from the dashboard.
+apiVersion: workspace.devfile.io/v1alpha2
+kind: DevWorkspace
+metadata:
+  name: {{ $ds.workspaceName | quote }}
+  namespace: {{ $ns | quote }}
+  labels:
+    {{- include "workshop.labels" $ | nindent 4 }}
+  annotations:
+    che.eclipse.org/che-editor: {{ $ds.editor.id | quote }}
+    che.eclipse.org/devfile-source: |
+      url:
+        location: {{ $ds.repositoryURL }}
+      factory:
+        params: url={{ $ds.repositoryURL }}
+spec:
+  started: {{ $ds.prestartWorkspaces }}
+  routingClass: che
+  contributions:
+    - name: editor
+      kubernetes:
+        name: {{ printf "che-code-%s" $ds.workspaceName | quote }}
+  template:
+    attributes:
+      controller.devfile.io/devworkspace-config:
+        name: devworkspace-config
+        namespace: {{ $ds.namespace | quote }}
+      controller.devfile.io/storage-type: per-user
+    parent:
+      uri: {{ $ds.devfileURL | quote }}
+{{- end }}

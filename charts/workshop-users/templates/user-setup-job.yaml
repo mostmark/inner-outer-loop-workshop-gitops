@@ -1,0 +1,222 @@
+{{- $users := include "workshop.users" . | fromYamlArray -}}
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: user-setup
+  namespace: {{ .Values.setupNamespace | quote }}
+  labels:
+    {{- include "workshop.labels" . | nindent 4 }}
+---
+# Read the bootstrap secrets (participant password, Gitea admin password).
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: workshop-user-setup
+  namespace: {{ .Values.gitea.namespace | quote }}
+  labels:
+    {{- include "workshop.labels" . | nindent 4 }}
+rules:
+  - apiGroups: [""]
+    resources: ["secrets"]
+    resourceNames: ["workshop-user-password", "gitea-admin-password"]
+    verbs: ["get"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: workshop-user-setup
+  namespace: {{ .Values.gitea.namespace | quote }}
+  labels:
+    {{- include "workshop.labels" . | nindent 4 }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: workshop-user-setup
+subjects:
+  - kind: ServiceAccount
+    name: user-setup
+    namespace: {{ .Values.setupNamespace | quote }}
+---
+# Read the participant Argo CD admin password to issue API tokens for the local accounts.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: workshop-user-setup
+  namespace: {{ .Values.argocd.namespace | quote }}
+  labels:
+    {{- include "workshop.labels" . | nindent 4 }}
+rules:
+  - apiGroups: [""]
+    resources: ["secrets"]
+    resourceNames: ["argocd-cluster"]
+    verbs: ["get"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: workshop-user-setup
+  namespace: {{ .Values.argocd.namespace | quote }}
+  labels:
+    {{- include "workshop.labels" . | nindent 4 }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: workshop-user-setup
+subjects:
+  - kind: ServiceAccount
+    name: user-setup
+    namespace: {{ .Values.setupNamespace | quote }}
+{{- range $user := $users }}
+{{- range $ns := list (printf "devspaces-%s" $user) (printf "cn-project-%s" $user) }}
+---
+# Write the per-user credential secrets.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: workshop-user-setup
+  namespace: {{ $ns | quote }}
+  labels:
+    {{- include "workshop.labels" $ | nindent 4 }}
+rules:
+  - apiGroups: [""]
+    resources: ["secrets"]
+    verbs: ["get", "create", "patch", "update"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: workshop-user-setup
+  namespace: {{ $ns | quote }}
+  labels:
+    {{- include "workshop.labels" $ | nindent 4 }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: workshop-user-setup
+subjects:
+  - kind: ServiceAccount
+    name: user-setup
+    namespace: {{ $.Values.setupNamespace | quote }}
+{{- end }}
+{{- end }}
+---
+# Creates everything per user that needs a secret value, so no password or token lives in Git:
+#   - the Gitea account <user> with the workshop password (created or password re-synced),
+#   - an Argo CD API token for the local account <user> (apiKey capability only), stored as
+#     Secret argocd-env-secret in cn-project-<user> (used by the CD pipeline Task) and in the
+#     workspace credentials,
+#   - Secret workshop-credentials in devspaces-<user>, mounted into the workspace as env vars,
+#   - Secret workshop-git-credentials in devspaces-<user>, used by git in the workspace to push
+#     to Gitea.
+# The Job is idempotent: existing valid tokens are kept.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: user-setup
+  namespace: {{ .Values.setupNamespace | quote }}
+  labels:
+    {{- include "workshop.labels" . | nindent 4 }}
+  annotations:
+    argocd.argoproj.io/hook: Sync
+    argocd.argoproj.io/hook-delete-policy: BeforeHookCreation
+    argocd.argoproj.io/sync-wave: "5"
+spec:
+  backoffLimit: 6
+  activeDeadlineSeconds: 1800
+  template:
+    spec:
+      serviceAccountName: user-setup
+      restartPolicy: OnFailure
+      containers:
+        - name: setup
+          image: {{ .Values.jobImage | quote }}
+          env:
+            - name: USERS
+              value: {{ join " " $users | quote }}
+            - name: GITEA_URL
+              value: {{ .Values.gitea.url | quote }}
+            - name: GITEA_NAMESPACE
+              value: {{ .Values.gitea.namespace | quote }}
+            - name: ARGOCD_NAMESPACE
+              value: {{ .Values.argocd.namespace | quote }}
+            - name: ARGOCD_SERVER
+              value: {{ .Values.argocd.server | quote }}
+          command: ["/bin/bash", "-c"]
+          args:
+            - |
+              set -euo pipefail
+              secret() { oc get secret "$2" -n "$1" -o jsonpath="{.data.$3}" | base64 -d; }
+              json() { python3 -c "import json,sys; print(json.load(sys.stdin)$1)"; }
+              # apply_secret <namespace> <name> <labels-json> <annotations-json> KEY=VALUE...
+              apply_secret() {
+                python3 - "$@" <<'PY' | oc apply -f - >/dev/null
+              import json, sys
+              ns, name, labels, annotations, *pairs = sys.argv[1:]
+              labels = json.loads(labels)
+              labels["app.kubernetes.io/part-of"] = "inner-outer-loop-workshop"
+              print(json.dumps({"apiVersion": "v1", "kind": "Secret", "type": "Opaque",
+                "metadata": {"name": name, "namespace": ns, "labels": labels,
+                             "annotations": json.loads(annotations)},
+                "stringData": dict(p.split("=", 1) for p in pairs)}))
+              PY
+              }
+              urlencode() { python3 -c 'import sys,urllib.parse; print(urllib.parse.quote(sys.argv[1], safe=""))' "$1"; }
+
+              USER_PASSWORD=$(secret "$GITEA_NAMESPACE" workshop-user-password userPassword)
+              GITEA_ADMIN=$(oc get gitea -n "$GITEA_NAMESPACE" -o jsonpath='{.items[0].spec.giteaAdminUser}' 2>/dev/null || true)
+              GITEA_ADMIN=${GITEA_ADMIN:-gitea-admin}
+              GITEA_ADMIN_PASSWORD=$(secret "$GITEA_NAMESPACE" gitea-admin-password adminPassword)
+              ARGOCD_ADMIN_PASSWORD=$(secret "$ARGOCD_NAMESPACE" argocd-cluster admin.password)
+
+              echo "Waiting for Gitea and Argo CD"
+              until curl -fsS -o /dev/null "$GITEA_URL/api/v1/version"; do sleep 10; done
+              until curl -fsS -o /dev/null "http://$ARGOCD_SERVER/healthz"; do sleep 10; done
+
+              ARGOCD_ADMIN_TOKEN=$(curl -fsS -X POST -H 'Content-Type: application/json' \
+                -d "$(python3 -c 'import json,sys; print(json.dumps({"username":"admin","password":sys.argv[1]}))' "$ARGOCD_ADMIN_PASSWORD")" \
+                "http://$ARGOCD_SERVER/api/v1/session" | json '["token"]')
+
+              for user in $USERS; do
+                echo "== $user"
+                # Gitea account
+                body=$(python3 -c 'import json,sys; print(json.dumps({"username":sys.argv[1],"login_name":sys.argv[1],"email":sys.argv[1]+"@example.com","password":sys.argv[2],"must_change_password":False,"send_notify":False,"source_id":0}))' "$user" "$USER_PASSWORD")
+                code=$(curl -sS -o /tmp/out -w '%{http_code}' -u "$GITEA_ADMIN:$GITEA_ADMIN_PASSWORD" "$GITEA_URL/api/v1/users/$user")
+                if [ "$code" = "404" ]; then
+                  code=$(curl -sS -o /tmp/out -w '%{http_code}' -u "$GITEA_ADMIN:$GITEA_ADMIN_PASSWORD" -X POST -H 'Content-Type: application/json' -d "$body" "$GITEA_URL/api/v1/admin/users")
+                  echo "  Gitea account created (HTTP $code)"
+                else
+                  code=$(curl -sS -o /tmp/out -w '%{http_code}' -u "$GITEA_ADMIN:$GITEA_ADMIN_PASSWORD" -X PATCH -H 'Content-Type: application/json' -d "$body" "$GITEA_URL/api/v1/admin/users/$user")
+                  echo "  Gitea account updated (HTTP $code)"
+                fi
+                [ "${code:0:1}" = "2" ] || { cat /tmp/out; exit 1; }
+
+                # Argo CD API token for the local account <user>; kept while it is still valid.
+                token=$(oc get secret argocd-env-secret -n "cn-project-$user" -o jsonpath='{.data.ARGOCD_AUTH_TOKEN}' 2>/dev/null | base64 -d || true)
+                if [ -z "$token" ] || [ "$(curl -sS -H "Authorization: Bearer $token" "http://$ARGOCD_SERVER/api/v1/session/userinfo" | json '.get("loggedIn")')" != "True" ]; then
+                  token=$(curl -fsS -X POST -H "Authorization: Bearer $ARGOCD_ADMIN_TOKEN" -H 'Content-Type: application/json' \
+                    -d '{"id":"workshop"}' "http://$ARGOCD_SERVER/api/v1/account/$user/token" | json '["token"]')
+                  echo "  Argo CD token issued"
+                fi
+
+                apply_secret "cn-project-$user" argocd-env-secret '{}' '{}' \
+                  ARGOCD_AUTH_TOKEN="$token"
+                # Workspace environment: mounted as env vars into every workspace container.
+                apply_secret "devspaces-$user" workshop-credentials \
+                  '{"controller.devfile.io/mount-to-devworkspace":"true","controller.devfile.io/watch-secret":"true"}' \
+                  '{"controller.devfile.io/mount-as":"env"}' \
+                  WORKSHOP_PASSWORD="$USER_PASSWORD" ARGOCD_AUTH_TOKEN="$token"
+                # Git credentials for pushing to Gitea from the workspace.
+                apply_secret "devspaces-$user" workshop-git-credentials \
+                  '{"controller.devfile.io/git-credential":"true","controller.devfile.io/watch-secret":"true"}' \
+                  '{"controller.devfile.io/mount-path":"/etc/secret"}' \
+                  credentials="${GITEA_URL%%://*}://$user:$(urlencode "$USER_PASSWORD")@${GITEA_URL#*://}"
+                echo "  secrets written"
+              done
+              echo "All users are set up"
+          resources:
+            requests:
+              cpu: 10m
+              memory: 64Mi
+            limits:
+              memory: 256Mi

@@ -1,0 +1,55 @@
+{{- $users := include "workshop.users" . | fromYamlArray -}}
+{{- range $user := $users }}
+{{- range $ns := list (printf "my-project-%s" $user) (printf "devspaces-%s" $user) }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: {{ printf "%s-admin" $user | quote }}
+  namespace: {{ $ns | quote }}
+  labels:
+    {{- include "workshop.labels" $ | nindent 4 }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: admin
+subjects:
+  - apiGroup: rbac.authorization.k8s.io
+    kind: User
+    name: {{ $user | quote }}
+{{- end }}
+---
+# The staging project is deployed by Argo CD; participants get edit (as in the original setup).
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: {{ printf "%s-edit" $user | quote }}
+  namespace: {{ printf "cn-project-%s" $user | quote }}
+  labels:
+    {{- include "workshop.labels" $ | nindent 4 }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: edit
+subjects:
+  - apiGroup: rbac.authorization.k8s.io
+    kind: User
+    name: {{ $user | quote }}
+---
+# Quarkus and Spring Boot read their ConfigMaps through the Kubernetes API in staging.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: default-view
+  namespace: {{ printf "cn-project-%s" $user | quote }}
+  labels:
+    {{- include "workshop.labels" $ | nindent 4 }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: view
+subjects:
+  - kind: ServiceAccount
+    name: default
+    namespace: {{ printf "cn-project-%s" $user | quote }}
+{{- end }}

@@ -1,0 +1,24 @@
+{{- $users := include "workshop.users" . | fromYamlArray -}}
+{{- range $user := $users }}
+---
+# The participant's Argo CD project. RBAC in the participant Argo CD instance (platform chart)
+# limits each user to their own project, which in turn may only deploy into cn-project-<user>
+# from the user's own Gitea repositories.
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata:
+  name: {{ printf "cn-project-%s" $user | quote }}
+  namespace: {{ $.Values.argocd.namespace | quote }}
+  labels:
+    {{- include "workshop.labels" $ | nindent 4 }}
+    workshop.redhat.com/user: {{ $user | quote }}
+spec:
+  description: {{ printf "Outer Loop staging of %s" $user | quote }}
+  sourceRepos:
+    - {{ printf "%s/%s/*" $.Values.gitea.url $user | quote }}
+    - {{ printf "https://gitea-server-%s.*/%s/*" $.Values.gitea.namespace $user | quote }}
+  destinations:
+    - server: https://kubernetes.default.svc
+      namespace: {{ printf "cn-project-%s" $user | quote }}
+  clusterResourceWhitelist: []
+{{- end }}

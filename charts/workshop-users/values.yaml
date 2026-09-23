@@ -1,4 +1,43 @@
 users:
+  # Generated users are named <prefix><number>, for example user1..user10.
   count: 10
   prefix: user
+  # When explicitNames is non-empty, it is used instead of count/prefix.
   explicitNames: []
+
+setupNamespace: workshop-setup
+jobImage: image-registry.openshift-image-registry.svc:5000/openshift/cli:latest
+
+# Participant Argo CD instance (platform chart).
+argocd:
+  namespace: argocd
+  server: argocd-server.argocd.svc
+
+gitea:
+  namespace: gitea
+  url: http://gitea-server.gitea.svc:3000
+
+mavenMirrorURL: http://nexus.nexus.svc:8081/repository/maven-all-public/
+
+serviceMesh:
+  discoveryLabel:
+    key: istio-discovery
+    value: enabled
+
+devspaces:
+  namespace: openshift-devspaces
+  # One workspace per participant is always pre-created from the code repository's devfile.
+  # With prestartWorkspaces it is also started, so participants find a running IDE (costs about
+  # 0.25 vCPU / 1.3 GiB requested and up to 2.5 vCPU / 5 GiB per participant, see README).
+  prestartWorkspaces: true
+  workspaceName: wksp-end-to-end-dev
+  devfileURL: https://raw.githubusercontent.com/mostmark/inner-outer-loop-workshop-code/main/devfile.yaml
+  repositoryURL: https://github.com/mostmark/inner-outer-loop-workshop-code.git
+  repositoryRevision: main
+  # VS Code editor of Dev Spaces 3.30, copied from the `che-code.yaml` entry of the
+  # editors-definitions ConfigMap in openshift-devspaces. Update the digests when Dev Spaces is
+  # upgraded to a new minor version.
+  editor:
+    id: che-incubator/che-code/latest
+    injectorImage: registry.redhat.io/devspaces/code-rhel9@sha256:db6c961a00751e4cf01dea997c819431f2ab950a11253660b5fd0238a568923b
+    runtimeImage: registry.redhat.io/devspaces/udi-rhel9@sha256:184f43b31b4bdc7ace01be27f6e57d5bb7cd9203226b5978f084ea0370f2d6f8
