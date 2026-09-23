@@ -1,0 +1,56 @@
+{{- if .Values.participantArgoCD.enabled }}
+{{- $a := .Values.participantArgoCD }}
+{{- $users := include "workshop.users" . | fromYamlArray }}
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: {{ $a.namespace | quote }}
+  labels:
+    {{- include "workshop.labels" . | nindent 4 }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "-1"
+    openshift.io/display-name: Argo CD for workshop participants
+---
+# Participants log in with their OpenShift account (Dex OpenShift connector). Each participant can
+# only work with Applications, repositories and logs of their own AppProject cn-project-<user>
+# (the AppProjects are created by the users chart). A local account with the same name and only
+# the apiKey capability lets pipelines and devfile scripts use an API token instead of a password.
+apiVersion: argoproj.io/v1beta1
+kind: ArgoCD
+metadata:
+  name: {{ $a.name | quote }}
+  namespace: {{ $a.namespace | quote }}
+  labels:
+    {{- include "workshop.labels" . | nindent 4 }}
+spec:
+  server:
+    # TLS terminates at the route; in-cluster clients use plain HTTP to argocd-server.argocd.svc.
+    insecure: true
+    route:
+      enabled: true
+      tls:
+        termination: edge
+        insecureEdgeTerminationPolicy: Redirect
+  sso:
+    provider: dex
+    dex:
+      openShiftOAuth: true
+  rbac:
+    defaultPolicy: ""
+    scopes: "[groups, preferred_username]"
+    policy: |
+      {{- range $user := $users }}
+      p, role:{{ $user }}, applications, *, cn-project-{{ $user }}/*, allow
+      p, role:{{ $user }}, applicationsets, *, cn-project-{{ $user }}/*, allow
+      p, role:{{ $user }}, logs, get, cn-project-{{ $user }}/*, allow
+      p, role:{{ $user }}, projects, get, cn-project-{{ $user }}, allow
+      p, role:{{ $user }}, repositories, *, cn-project-{{ $user }}/*, allow
+      p, role:{{ $user }}, clusters, get, https://kubernetes.default.svc, allow
+      g, {{ $user }}, role:{{ $user }}
+      {{- end }}
+  extraConfig:
+    {{- range $user := $users }}
+    accounts.{{ $user }}: apiKey
+    {{- end }}
+{{- end }}

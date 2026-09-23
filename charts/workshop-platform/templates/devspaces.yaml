@@ -1,0 +1,43 @@
+{{- if .Values.devspaces.enabled }}
+{{- $ds := .Values.devspaces }}
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: {{ $ds.namespace | quote }}
+  labels:
+    {{- include "workshop.labels" . | nindent 4 }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "-1"
+---
+apiVersion: org.eclipse.che/v2
+kind: CheCluster
+metadata:
+  name: {{ $ds.name | quote }}
+  namespace: {{ $ds.namespace | quote }}
+  labels:
+    {{- include "workshop.labels" . | nindent 4 }}
+spec:
+  components:
+    cheServer:
+      debug: false
+      logLevel: INFO
+    metrics:
+      enable: true
+  devEnvironments:
+    defaultNamespace:
+      template: {{ $ds.userNamespaceTemplate | quote }}
+      autoProvision: true
+    maxNumberOfRunningWorkspacesPerUser: {{ $ds.maxRunningWorkspacesPerUser }}
+    secondsOfInactivityBeforeIdling: {{ $ds.secondsOfInactivityBeforeIdling }}
+    secondsOfRunBeforeIdling: {{ $ds.secondsOfRunBeforeIdling }}
+    startTimeoutSeconds: {{ $ds.startTimeoutSeconds }}
+    disableContainerBuildCapabilities: {{ $ds.disableContainerBuildCapabilities }}
+    storage:
+      pvcStrategy: {{ $ds.storage.pvcStrategy | quote }}
+      perUserStrategyPvcConfig:
+        claimSize: {{ $ds.storage.claimSize | quote }}
+  networking:
+    auth:
+      gateway: {}
+{{- end }}

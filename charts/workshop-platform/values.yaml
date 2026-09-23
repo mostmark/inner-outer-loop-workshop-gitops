@@ -1,4 +1,104 @@
 users:
+  # Generated users are named <prefix><number>, for example user1..user10.
   count: 10
   prefix: user
+  # When explicitNames is non-empty, it is used instead of count/prefix.
   explicitNames: []
+
+# Namespace of the provisioning helper Jobs (created by the operators chart).
+setupNamespace: workshop-setup
+# Image for helper Jobs: bash, oc, curl and python3. Ships with every OpenShift cluster.
+jobImage: image-registry.openshift-image-registry.svc:5000/openshift/cli:latest
+waitTimeoutSeconds: 1500
+
+devspaces:
+  enabled: true
+  namespace: openshift-devspaces
+  name: devspaces
+  # Participants' Dev Spaces namespaces, pre-created by the users chart with the same pattern.
+  userNamespaceTemplate: devspaces-<username>
+  maxRunningWorkspacesPerUser: 2
+  # Workspaces never idle during the workshop (the old setup used the same behaviour).
+  secondsOfInactivityBeforeIdling: -1
+  secondsOfRunBeforeIdling: -1
+  startTimeoutSeconds: 600
+  storage:
+    pvcStrategy: per-user
+    claimSize: 10Gi
+  # The labs build images on the cluster (S2I/Tekton), not inside the workspace.
+  disableContainerBuildCapabilities: true
+
+serviceMesh:
+  enabled: true
+  # OSSM 3.4 supports Istio v1.26 to v1.30. `-latest` follows patch releases of that minor only.
+  istioVersion: v1.30-latest
+  discoveryLabel:
+    key: istio-discovery
+    value: enabled
+  kiali:
+    enabled: true
+    name: kiali
+  # Embedded Kiali in the web console. The standalone Kiali route stays the one the guide uses,
+  # because the plugin lacks some actions (for example "Enable Auto Injection").
+  consolePlugin:
+    enabled: true
+
+monitoring:
+  # Kiali reads Istio metrics from the Thanos querier, which needs user workload monitoring.
+  enableUserWorkload: true
+
+# Argo CD instance for participants (OpenShift login). openshift-gitops stays admin-only.
+participantArgoCD:
+  enabled: true
+  namespace: argocd
+  name: argocd
+
+gitea:
+  enabled: true
+  namespace: gitea
+  name: gitea-server
+  image: quay.io/rhpds/gitea
+  imageTag: "1.27.3"
+  adminUser: gitea-admin
+  adminEmail: gitea-admin@example.com
+  volumeSize: 4Gi
+  postgresqlVolumeSize: 4Gi
+  resources:
+    cpuRequest: 200m
+    cpuLimit: "1"
+    memoryRequest: 512Mi
+    memoryLimit: 1Gi
+
+nexus:
+  enabled: true
+  namespace: nexus
+  name: nexus
+  image: docker.io/sonatype/nexus3:3.96.3
+  volumeSize: 10Gi
+  resources:
+    requests:
+      cpu: 500m
+      memory: 2Gi
+    limits:
+      cpu: "2"
+      memory: 3Gi
+  # Maven proxies grouped behind maven-all-public (same set the old setup used).
+  proxies:
+    - name: maven-central
+      url: https://repo1.maven.org/maven2/
+    - name: redhat-ga
+      url: https://maven.repository.redhat.com/ga/
+    - name: jboss
+      url: https://repository.jboss.org/nexus/content/groups/public/
+  group: maven-all-public
+
+pipelines:
+  # The openshift-pipelines s2i-java Task builds from openshift/java:<VERSION>. OpenShift 4.22
+  # no longer ships a Java 21 tag there, so the workshop adds one.
+  javaBuilderTag:
+    enabled: true
+    name: openjdk-21-ubi9
+    image: registry.access.redhat.com/ubi9/openjdk-21:latest
+  # Console plugins to enable (the Pipeline builder lives in the Pipelines plugin).
+  consolePlugins:
+    - pipelines-console-plugin

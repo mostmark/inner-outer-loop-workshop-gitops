@@ -1,6 +1,6 @@
 apiVersion: v2
 name: workshop-platform
-description: placeholder
+description: Shared platform instances for the Inner & Outer Loop workshop (Dev Spaces, Service Mesh, Kiali, monitoring, participant Argo CD, Gitea, Nexus).
 type: application
 version: 0.1.0
 appVersion: "1.0"

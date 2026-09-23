@@ -1,0 +1,235 @@
+{{- if .Values.nexus.enabled }}
+{{- $n := .Values.nexus }}
+---
+# In-cluster Maven mirror, replacing the old nexus.opentlc-shared.svc shared service. Workspaces
+# and S2I builds use http://nexus.nexus.svc:8081/repository/maven-all-public/.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: {{ $n.namespace | quote }}
+  labels:
+    {{- include "workshop.labels" . | nindent 4 }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "-1"
+    openshift.io/display-name: Maven mirror (Nexus)
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: nexus-data
+  namespace: {{ $n.namespace | quote }}
+  labels:
+    {{- include "workshop.labels" . | nindent 4 }}
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: {{ $n.volumeSize | quote }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ $n.name | quote }}
+  namespace: {{ $n.namespace | quote }}
+  labels:
+    {{- include "workshop.labels" . | nindent 4 }}
+    app: nexus
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: nexus
+  template:
+    metadata:
+      labels:
+        app: nexus
+    spec:
+      containers:
+        - name: nexus
+          image: {{ $n.image | quote }}
+          env:
+            # Start with the well-known admin password; the configuration Job replaces it with a
+            # random one stored in the nexus-admin-password secret.
+            - name: NEXUS_SECURITY_RANDOMPASSWORD
+              value: "false"
+            - name: INSTALL4J_ADD_VM_PARAMS
+              value: "-Xms1g -Xmx1g -XX:MaxDirectMemorySize=1g -Djava.util.prefs.userRoot=/nexus-data/javaprefs"
+          ports:
+            - name: http
+              containerPort: 8081
+          readinessProbe:
+            httpGet:
+              path: /service/rest/v1/status
+              port: 8081
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            failureThreshold: 6
+          livenessProbe:
+            httpGet:
+              path: /service/rest/v1/status
+              port: 8081
+            initialDelaySeconds: 180
+            periodSeconds: 20
+            failureThreshold: 6
+          resources:
+            {{- toYaml $n.resources | nindent 12 }}
+          volumeMounts:
+            - name: data
+              mountPath: /nexus-data
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: nexus-data
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ $n.name | quote }}
+  namespace: {{ $n.namespace | quote }}
+  labels:
+    {{- include "workshop.labels" . | nindent 4 }}
+spec:
+  selector:
+    app: nexus
+  ports:
+    - name: http
+      port: 8081
+      targetPort: 8081
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: nexus-config
+  namespace: {{ $n.namespace | quote }}
+  labels:
+    {{- include "workshop.labels" . | nindent 4 }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: nexus-config
+  namespace: {{ $n.namespace | quote }}
+  labels:
+    {{- include "workshop.labels" . | nindent 4 }}
+rules:
+  - apiGroups: [""]
+    resources: ["secrets"]
+    verbs: ["get", "create"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: nexus-config
+  namespace: {{ $n.namespace | quote }}
+  labels:
+    {{- include "workshop.labels" . | nindent 4 }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: nexus-config
+subjects:
+  - kind: ServiceAccount
+    name: nexus-config
+    namespace: {{ $n.namespace | quote }}
+---
+# Configures Nexus through its REST API: random admin password, Community Edition EULA,
+# anonymous read access, the Maven proxies and the maven-all-public group. Idempotent.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: nexus-config
+  namespace: {{ $n.namespace | quote }}
+  labels:
+    {{- include "workshop.labels" . | nindent 4 }}
+  annotations:
+    argocd.argoproj.io/hook: Sync
+    argocd.argoproj.io/hook-delete-policy: BeforeHookCreation
+    argocd.argoproj.io/sync-wave: "2"
+spec:
+  backoffLimit: 6
+  activeDeadlineSeconds: 1800
+  template:
+    spec:
+      serviceAccountName: nexus-config
+      restartPolicy: OnFailure
+      containers:
+        - name: configure
+          image: {{ .Values.jobImage | quote }}
+          env:
+            - name: NEXUS
+              value: {{ printf "http://%s.%s.svc:8081" $n.name $n.namespace | quote }}
+            - name: PROXIES
+              value: {{ range $p := $n.proxies }}{{ printf "%s=%s " $p.name $p.url }}{{ end }}
+            - name: GROUP
+              value: {{ $n.group | quote }}
+          command: ["/bin/bash", "-c"]
+          args:
+            - |
+              set -euo pipefail
+              api() { curl -sS -o /tmp/out -w '%{http_code}' -u "admin:${PASSWORD}" "$@"; }
+              echo "Waiting for Nexus at $NEXUS"
+              until curl -fsS "$NEXUS/service/rest/v1/status/writable" >/dev/null 2>&1; do sleep 10; done
+
+              if oc get secret nexus-admin-password >/dev/null 2>&1; then
+                PASSWORD=$(oc get secret nexus-admin-password -o jsonpath='{.data.password}' | base64 -d)
+              else
+                PASSWORD=$(openssl rand -hex 16)
+                oc create secret generic nexus-admin-password --from-literal=password="$PASSWORD"
+              fi
+              if curl -fsS -u admin:admin123 "$NEXUS/service/rest/v1/status/check" >/dev/null 2>&1; then
+                echo "Replacing the default admin password"
+                curl -fsS -u admin:admin123 -X PUT -H 'Content-Type: text/plain' --data "$PASSWORD" \
+                  "$NEXUS/service/rest/v1/security/users/admin/change-password"
+              fi
+
+              # Community Edition asks for EULA acceptance once.
+              code=$(api "$NEXUS/service/rest/v1/system/eula")
+              if [ "$code" = "200" ] && python3 -c 'import json,sys; sys.exit(0 if not json.load(open("/tmp/out")).get("accepted") else 1)'; then
+                echo "Accepting the Community Edition EULA"
+                python3 -c 'import json; d=json.load(open("/tmp/out")); d["accepted"]=True; print(json.dumps(d))' > /tmp/eula
+                code=$(api -X POST -H 'Content-Type: application/json' -d @/tmp/eula "$NEXUS/service/rest/v1/system/eula")
+                [ "${code:0:1}" = "2" ] || { cat /tmp/out; exit 1; }
+              fi
+
+              echo "Enabling anonymous read access"
+              code=$(api -X PUT -H 'Content-Type: application/json' \
+                -d '{"enabled":true,"userId":"anonymous","realmName":"NexusAuthorizingRealm"}' \
+                "$NEXUS/service/rest/v1/security/anonymous")
+              [ "${code:0:1}" = "2" ] || { cat /tmp/out; exit 1; }
+
+              members=""
+              for entry in $PROXIES; do
+                name=${entry%%=*}; url=${entry#*=}
+                members="$members\"$name\","
+                body=$(printf '{"name":"%s","online":true,"storage":{"blobStoreName":"default","strictContentTypeValidation":true},"proxy":{"remoteUrl":"%s","contentMaxAge":1440,"metadataMaxAge":1440},"negativeCache":{"enabled":true,"timeToLive":1440},"httpClient":{"blocked":false,"autoBlock":true},"maven":{"versionPolicy":"RELEASE","layoutPolicy":"PERMISSIVE","contentDisposition":"INLINE"}}' "$name" "$url")
+                if [ "$(api "$NEXUS/service/rest/v1/repositories/maven/proxy/$name")" = "200" ]; then
+                  code=$(api -X PUT -H 'Content-Type: application/json' -d "$body" "$NEXUS/service/rest/v1/repositories/maven/proxy/$name")
+                else
+                  code=$(api -X POST -H 'Content-Type: application/json' -d "$body" "$NEXUS/service/rest/v1/repositories/maven/proxy")
+                fi
+                [ "${code:0:1}" = "2" ] || { echo "proxy $name: HTTP $code"; cat /tmp/out; exit 1; }
+                echo "Proxy $name -> $url"
+              done
+
+              body=$(printf '{"name":"%s","online":true,"storage":{"blobStoreName":"default","strictContentTypeValidation":true},"group":{"memberNames":[%s]}}' "$GROUP" "${members%,}")
+              if [ "$(api "$NEXUS/service/rest/v1/repositories/maven/group/$GROUP")" = "200" ]; then
+                code=$(api -X PUT -H 'Content-Type: application/json' -d "$body" "$NEXUS/service/rest/v1/repositories/maven/group/$GROUP")
+              else
+                code=$(api -X POST -H 'Content-Type: application/json' -d "$body" "$NEXUS/service/rest/v1/repositories/maven/group")
+              fi
+              [ "${code:0:1}" = "2" ] || { echo "group $GROUP: HTTP $code"; cat /tmp/out; exit 1; }
+              echo "Group $GROUP ready"
+
+              # Anonymous access must be able to read through the group.
+              curl -fsS -o /dev/null "$NEXUS/repository/$GROUP/org/apache/maven/plugins/maven-clean-plugin/maven-metadata.xml"
+              echo "Nexus is configured"
+          resources:
+            requests:
+              cpu: 10m
+              memory: 64Mi
+            limits:
+              memory: 256Mi
+{{- end }}

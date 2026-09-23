@@ -1,0 +1,17 @@
+{{- if .Values.monitoring.enableUserWorkload }}
+---
+# Enables monitoring for user-defined projects. Kiali's graph and the traffic distribution steps
+# of the Service Mesh module read Istio metrics that only user workload monitoring collects.
+# If your cluster already has a cluster-monitoring-config ConfigMap with other settings, merge
+# them into this template (or disable it) before bootstrapping: Argo CD owns this object.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: cluster-monitoring-config
+  namespace: openshift-monitoring
+  labels:
+    {{- include "workshop.labels" . | nindent 4 }}
+data:
+  config.yaml: |
+    enableUserWorkload: true
+{{- end }}

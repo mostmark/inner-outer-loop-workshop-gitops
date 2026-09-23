@@ -1,0 +1,115 @@
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: platform-readiness
+  namespace: {{ .Values.setupNamespace | quote }}
+  labels:
+    {{- include "workshop.labels" . | nindent 4 }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: workshop-platform-readiness
+  labels:
+    {{- include "workshop.labels" . | nindent 4 }}
+rules:
+  - apiGroups: ["org.eclipse.che"]
+    resources: ["checlusters"]
+    verbs: ["get", "list"]
+  - apiGroups: ["sailoperator.io"]
+    resources: ["istios", "istiocnis"]
+    verbs: ["get", "list"]
+  - apiGroups: ["argoproj.io"]
+    resources: ["argocds"]
+    verbs: ["get", "list"]
+  - apiGroups: ["pfe.rhpds.com"]
+    resources: ["gitea"]
+    verbs: ["get", "list"]
+  - apiGroups: ["apps"]
+    resources: ["deployments", "statefulsets"]
+    verbs: ["get", "list"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: workshop-platform-readiness
+  labels:
+    {{- include "workshop.labels" . | nindent 4 }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: workshop-platform-readiness
+subjects:
+  - kind: ServiceAccount
+    name: platform-readiness
+    namespace: {{ .Values.setupNamespace | quote }}
+---
+# Argo CD has no health assessment for most of these custom resources, so this last Sync hook
+# waits until every platform component is actually serving. The users Application (next wave of
+# the root Application) only starts afterwards.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: wait-for-platform
+  namespace: {{ .Values.setupNamespace | quote }}
+  labels:
+    {{- include "workshop.labels" . | nindent 4 }}
+  annotations:
+    argocd.argoproj.io/hook: Sync
+    argocd.argoproj.io/hook-delete-policy: BeforeHookCreation
+    argocd.argoproj.io/sync-wave: "10"
+spec:
+  backoffLimit: 1
+  activeDeadlineSeconds: {{ add .Values.waitTimeoutSeconds 120 }}
+  template:
+    spec:
+      serviceAccountName: platform-readiness
+      restartPolicy: Never
+      containers:
+        - name: wait
+          image: {{ .Values.jobImage | quote }}
+          env:
+            - name: TIMEOUT
+              value: {{ .Values.waitTimeoutSeconds | quote }}
+          command: ["/bin/bash", "-c"]
+          args:
+            - |
+              set -uo pipefail
+              deadline=$((SECONDS + TIMEOUT))
+              check() {
+                local what="$1"; shift
+                until out=$("$@" 2>/dev/null) && [ -n "$out" ]; do
+                  if [ $SECONDS -ge $deadline ]; then echo "FAIL $what"; exit 1; fi
+                  echo "wait $what"; sleep 15
+                done
+                echo "OK   $what"
+              }
+              deploy_ready() { oc get deployment "$2" -n "$1" -o jsonpath='{.status.availableReplicas}' | grep -v '^0$'; }
+              {{- if .Values.devspaces.enabled }}
+              check "Dev Spaces (CheCluster Active)" bash -c "oc get checluster {{ .Values.devspaces.name }} -n {{ .Values.devspaces.namespace }} -o jsonpath='{.status.chePhase}' | grep -x Active"
+              {{- end }}
+              {{- if .Values.serviceMesh.enabled }}
+              check "IstioCNI Ready" bash -c "oc get istiocni default -o jsonpath='{.status.conditions[?(@.type==\"Ready\")].status}' | grep -x True"
+              check "Istio Ready" bash -c "oc get istio default -o jsonpath='{.status.conditions[?(@.type==\"Ready\")].status}' | grep -x True"
+              {{- if .Values.serviceMesh.kiali.enabled }}
+              check "Kiali" deploy_ready istio-system kiali
+              {{- end }}
+              {{- end }}
+              {{- if .Values.participantArgoCD.enabled }}
+              check "participant Argo CD" bash -c "oc get argocd {{ .Values.participantArgoCD.name }} -n {{ .Values.participantArgoCD.namespace }} -o jsonpath='{.status.phase}' | grep -x Available"
+              {{- end }}
+              {{- if .Values.gitea.enabled }}
+              check "Gitea admin set up" bash -c "oc get gitea {{ .Values.gitea.name }} -n {{ .Values.gitea.namespace }} -o jsonpath='{.status.adminSetupComplete}' | grep -x true"
+              check "Gitea" deploy_ready {{ .Values.gitea.namespace }} {{ .Values.gitea.name }}
+              {{- end }}
+              {{- if .Values.nexus.enabled }}
+              check "Nexus" deploy_ready {{ .Values.nexus.namespace }} {{ .Values.nexus.name }}
+              {{- end }}
+              echo "Platform is ready"
+          resources:
+            requests:
+              cpu: 10m
+              memory: 64Mi
+            limits:
+              memory: 256Mi

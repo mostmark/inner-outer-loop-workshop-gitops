@@ -1,0 +1,112 @@
+{{- if .Values.pipelines.javaBuilderTag.enabled }}
+{{- $t := .Values.pipelines.javaBuilderTag }}
+---
+# The s2i-java Task from openshift-pipelines builds from openshift/java:<VERSION>. OpenShift 4.22
+# no longer ships a Java 21 tag in that image stream, so the workshop adds one. The Samples
+# operator leaves extra tags alone.
+apiVersion: image.openshift.io/v1
+kind: ImageStreamTag
+metadata:
+  name: {{ printf "java:%s" $t.name | quote }}
+  namespace: openshift
+  labels:
+    {{- include "workshop.labels" . | nindent 4 }}
+tag:
+  name: {{ $t.name | quote }}
+  from:
+    kind: DockerImage
+    name: {{ $t.image | quote }}
+  importPolicy:
+    importMode: Legacy
+  referencePolicy:
+    type: Local
+{{- end }}
+{{- with .Values.pipelines.consolePlugins }}
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: console-plugins
+  namespace: {{ $.Values.setupNamespace | quote }}
+  labels:
+    {{- include "workshop.labels" $ | nindent 4 }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: workshop-console-plugins
+  labels:
+    {{- include "workshop.labels" $ | nindent 4 }}
+rules:
+  - apiGroups: ["operator.openshift.io"]
+    resources: ["consoles"]
+    resourceNames: ["cluster"]
+    verbs: ["get", "patch"]
+  - apiGroups: ["console.openshift.io"]
+    resources: ["consoleplugins"]
+    verbs: ["get", "list"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: workshop-console-plugins
+  labels:
+    {{- include "workshop.labels" $ | nindent 4 }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: workshop-console-plugins
+subjects:
+  - kind: ServiceAccount
+    name: console-plugins
+    namespace: {{ $.Values.setupNamespace | quote }}
+---
+# Operators install their ConsolePlugin objects, but a plugin is only active once it is listed in
+# the cluster Console configuration. That list is shared with other plugins, so it is not managed
+# as a whole by Argo CD: this Job only appends the missing workshop plugins.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: enable-console-plugins
+  namespace: {{ $.Values.setupNamespace | quote }}
+  labels:
+    {{- include "workshop.labels" $ | nindent 4 }}
+  annotations:
+    argocd.argoproj.io/hook: Sync
+    argocd.argoproj.io/hook-delete-policy: BeforeHookCreation
+    argocd.argoproj.io/sync-wave: "2"
+spec:
+  backoffLimit: 6
+  activeDeadlineSeconds: 900
+  template:
+    spec:
+      serviceAccountName: console-plugins
+      restartPolicy: OnFailure
+      containers:
+        - name: enable
+          image: {{ $.Values.jobImage | quote }}
+          env:
+            - name: PLUGINS
+              value: {{ join " " . | quote }}
+          command: ["/bin/bash", "-c"]
+          args:
+            - |
+              set -euo pipefail
+              for plugin in $PLUGINS; do
+                until oc get consoleplugin "$plugin" >/dev/null 2>&1; do echo "Waiting for ConsolePlugin $plugin"; sleep 10; done
+                current=$(oc get consoles.operator.openshift.io cluster -o jsonpath='{.spec.plugins}')
+                if echo "$current" | grep -q "\"$plugin\""; then
+                  echo "$plugin already enabled"
+                elif [ -z "$current" ]; then
+                  oc patch consoles.operator.openshift.io cluster --type merge -p "{\"spec\":{\"plugins\":[\"$plugin\"]}}"
+                else
+                  oc patch consoles.operator.openshift.io cluster --type json -p "[{\"op\":\"add\",\"path\":\"/spec/plugins/-\",\"value\":\"$plugin\"}]"
+                fi
+              done
+          resources:
+            requests:
+              cpu: 10m
+              memory: 64Mi
+            limits:
+              memory: 256Mi
+{{- end }}

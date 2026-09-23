@@ -1,0 +1,157 @@
+{{- if .Values.serviceMesh.enabled }}
+{{- $sm := .Values.serviceMesh }}
+{{- range $ns := list "istio-system" "istio-cni" }}
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: {{ $ns }}
+  labels:
+    {{- include "workshop.labels" $ | nindent 4 }}
+    {{ $sm.discoveryLabel.key }}: {{ $sm.discoveryLabel.value | quote }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "-1"
+{{- end }}
+---
+apiVersion: sailoperator.io/v1
+kind: IstioCNI
+metadata:
+  name: default
+  labels:
+    {{- include "workshop.labels" . | nindent 4 }}
+spec:
+  namespace: istio-cni
+  version: {{ $sm.istioVersion | quote }}
+---
+# Control plane. Only namespaces labelled istio-discovery=enabled (istio-system, istio-cni and the
+# participants' cn-project-<user> namespaces) are part of the mesh.
+apiVersion: sailoperator.io/v1
+kind: Istio
+metadata:
+  name: default
+  labels:
+    {{- include "workshop.labels" . | nindent 4 }}
+spec:
+  namespace: istio-system
+  version: {{ $sm.istioVersion | quote }}
+  updateStrategy:
+    type: InPlace
+  values:
+    meshConfig:
+      discoverySelectors:
+        - matchLabels:
+            {{ $sm.discoveryLabel.key }}: {{ $sm.discoveryLabel.value | quote }}
+---
+# Export Istio request metrics to Prometheus (user workload monitoring).
+apiVersion: telemetry.istio.io/v1
+kind: Telemetry
+metadata:
+  name: enable-prometheus-metrics
+  namespace: istio-system
+  labels:
+    {{- include "workshop.labels" . | nindent 4 }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
+spec:
+  metrics:
+    - providers:
+        - name: prometheus
+---
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: istiod-monitor
+  namespace: istio-system
+  labels:
+    {{- include "workshop.labels" . | nindent 4 }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
+spec:
+  targetLabels:
+    - app
+  selector:
+    matchLabels:
+      istio: pilot
+  endpoints:
+    - port: http-monitoring
+      interval: 30s
+---
+{{ include "workshop.istioProxyPodMonitor" (dict "namespace" "istio-system" "root" .) }}
+{{- if $sm.kiali.enabled }}
+---
+apiVersion: kiali.io/v1alpha1
+kind: Kiali
+metadata:
+  name: {{ $sm.kiali.name | quote }}
+  namespace: istio-system
+  labels:
+    {{- include "workshop.labels" . | nindent 4 }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
+spec:
+  version: default
+  auth:
+    strategy: openshift
+  deployment:
+    cluster_wide_access: true
+    discovery_selectors:
+      default:
+        - matchLabels:
+            {{ $sm.discoveryLabel.key }}: {{ $sm.discoveryLabel.value | quote }}
+  external_services:
+    prometheus:
+      url: https://thanos-querier.openshift-monitoring.svc.cluster.local:9091
+      auth:
+        type: bearer
+        use_kiali_token: true
+      thanos_proxy:
+        enabled: true
+    grafana:
+      enabled: false
+    tracing:
+      enabled: false
+  kiali_feature_flags:
+    validations:
+      # KIA0302: no matching workload for a Gateway selector (the per-user ingress gateway lives
+      # in the participant's namespace). KIA1301: VirtualService host warnings for the plain
+      # Kubernetes Services the exercises route to.
+      ignore:
+        - KIA0302
+        - KIA1301
+---
+# Kiali reads metrics from the Thanos querier with its own token.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: kiali-monitoring-rbac
+  labels:
+    {{- include "workshop.labels" . | nindent 4 }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: cluster-monitoring-view
+subjects:
+  - kind: ServiceAccount
+    name: kiali-service-account
+    namespace: istio-system
+{{- if $sm.consolePlugin.enabled }}
+---
+apiVersion: kiali.io/v1alpha1
+kind: OSSMConsole
+metadata:
+  name: ossmconsole
+  namespace: istio-system
+  labels:
+    {{- include "workshop.labels" . | nindent 4 }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "2"
+spec:
+  version: default
+  kiali:
+    serviceName: kiali
+    serviceNamespace: istio-system
+{{- end }}
+{{- end }}
+{{- end }}

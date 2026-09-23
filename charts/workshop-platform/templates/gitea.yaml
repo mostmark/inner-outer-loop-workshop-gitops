@@ -1,0 +1,39 @@
+{{- if .Values.gitea.enabled }}
+{{- $g := .Values.gitea }}
+---
+# bootstrap.sh creates this namespace first to hold the secrets gitea-admin-password and
+# workshop-user-password; Argo CD adopts it.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: {{ $g.namespace | quote }}
+  labels:
+    {{- include "workshop.labels" . | nindent 4 }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "-1"
+---
+apiVersion: pfe.rhpds.com/v1
+kind: Gitea
+metadata:
+  name: {{ $g.name | quote }}
+  namespace: {{ $g.namespace | quote }}
+  labels:
+    {{- include "workshop.labels" . | nindent 4 }}
+spec:
+  giteaImage: {{ $g.image | quote }}
+  giteaImageTag: {{ $g.imageTag | quote }}
+  giteaSsl: true
+  giteaVolumeSize: {{ $g.volumeSize | quote }}
+  postgresqlVolumeSize: {{ $g.postgresqlVolumeSize | quote }}
+  giteaCpuRequest: {{ $g.resources.cpuRequest | quote }}
+  giteaCpuLimit: {{ $g.resources.cpuLimit | quote }}
+  giteaMemoryRequest: {{ $g.resources.memoryRequest | quote }}
+  giteaMemoryLimit: {{ $g.resources.memoryLimit | quote }}
+  giteaAdminUser: {{ $g.adminUser | quote }}
+  giteaAdminEmail: {{ $g.adminEmail | quote }}
+  giteaAdminPasswordSecretName: gitea-admin-password
+  giteaAdminPasswordExpose: false
+  # Participant accounts are created by the users chart (it supports explicit user names).
+  giteaCreateUsers: false
+  giteaDisableRegistration: true
+{{- end }}
