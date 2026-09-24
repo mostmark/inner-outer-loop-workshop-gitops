@@ -249,6 +249,10 @@ for it, and then removes those leftovers (and OpenShift GitOps itself unless `--
 ./cleanup.sh            # asks for confirmation; --yes, --keep-gitops, --keep-crds
 ```
 
+The script ends by checking that no workshop namespace, operator, CRD, webhook or cluster
+addition is left; if something is, it lists it and exits non-zero. It is idempotent and can be
+re-run after an interruption (operator objects whose operator is already gone are de-finalized).
+
 ## Render Locally
 
 ```bash

@@ -207,3 +207,15 @@ the guide does by hand (Pipeline Builder, Argo CD UI) are replaced by their CLI/
 from the solution scripts. The Argo CD OpenShift login is verified separately by
 `isolation-check.sh`, which scripts the browser flow (Argo CD → Dex → OpenShift OAuth → identity
 provider → consent) and checks the resulting session's RBAC in both Argo CD instances.
+
+## D18. Cleanup order
+
+`cleanup.sh` deletes the root Application first, so Argo CD removes everything from Git while all
+operators still run and can process their finalizers (operator namespaces carry `Delete=false`
+for that reason). Only then does it remove what OLM and the operators created: TektonConfig
+(waiting for its installer sets before the Pipelines operator goes), the operators' Subscriptions
+and CSVs, run-time objects (ConsolePlugins, the pipelines SCC, webhooks, ClusterRoles), CRDs, and
+finally OpenShift GitOps (default instance disabled first, because the operator re-creates it).
+The script verifies the end state and fails if anything is left. Found and fixed on the test
+cluster over three cleanup runs; the final version cleaned a complete installation with
+participant content in one pass (FINAL-REPORT section 4).
