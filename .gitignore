@@ -7,3 +7,4 @@ migration/drafts/
 
 # Credentials files with the users' passwords (bootstrap.sh --credentials-file)
 *.csv
+__pycache__/
