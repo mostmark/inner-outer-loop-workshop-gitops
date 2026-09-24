@@ -101,8 +101,20 @@ subjects:
 {{- end }}
 {{- end }}
 ---
+# Carries the checksum of the users' passwords. When bootstrap.sh changes the passwords, this
+# ConfigMap changes, the Application goes OutOfSync, and the automatic sync re-runs the Job below.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: user-setup-credentials
+  namespace: {{ .Values.setupNamespace | quote }}
+  labels:
+    {{- include "workshop.labels" . | nindent 4 }}
+data:
+  checksum: {{ .Values.credentialsChecksum | quote }}
+---
 # Creates everything per user that needs a secret value, so no password or token lives in Git:
-#   - the Gitea account <user> with the workshop password (created or password re-synced),
+#   - the Gitea account <user> with the user's password (created or password re-synced),
 #   - an Argo CD API token for the local account <user> (apiKey capability only), stored as
 #     Secret argocd-env-secret in cn-project-<user> (used by the CD pipeline Task) and in the
 #     workspace credentials,
@@ -164,7 +176,14 @@ spec:
               }
               urlencode() { python3 -c 'import sys,urllib.parse; print(urllib.parse.quote(sys.argv[1], safe=""))' "$1"; }
 
-              USER_PASSWORD=$(secret "$GITEA_NAMESPACE" workshop-user-password userPassword)
+              # Passwords: key password.<user> (one password per user) or userPassword (shared).
+              user_password() {
+                local pw
+                pw=$(secret "$GITEA_NAMESPACE" workshop-user-password "password.$1" 2>/dev/null || true)
+                [ -n "$pw" ] || pw=$(secret "$GITEA_NAMESPACE" workshop-user-password userPassword 2>/dev/null || true)
+                [ -n "$pw" ] || { echo "No password for user $1 in secret workshop-user-password" >&2; return 1; }
+                printf '%s' "$pw"
+              }
               GITEA_ADMIN=$(oc get gitea -n "$GITEA_NAMESPACE" -o jsonpath='{.items[0].spec.giteaAdminUser}' 2>/dev/null || true)
               GITEA_ADMIN=${GITEA_ADMIN:-gitea-admin}
               GITEA_ADMIN_PASSWORD=$(secret "$GITEA_NAMESPACE" gitea-admin-password adminPassword)
@@ -180,6 +199,7 @@ spec:
 
               for user in $USERS; do
                 echo "== $user"
+                USER_PASSWORD=$(user_password "$user")
                 # Gitea account
                 body=$(python3 -c 'import json,sys; print(json.dumps({"username":sys.argv[1],"login_name":sys.argv[1],"email":sys.argv[1]+"@example.com","password":sys.argv[2],"must_change_password":False,"send_notify":False,"source_id":0}))' "$user" "$USER_PASSWORD")
                 code=$(curl -sS -o /tmp/out -w '%{http_code}' -u "$GITEA_ADMIN:$GITEA_ADMIN_PASSWORD" "$GITEA_URL/api/v1/users/$user")

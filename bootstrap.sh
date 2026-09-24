@@ -15,6 +15,8 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=lib/credentials.sh
+source "${SCRIPT_DIR}/lib/credentials.sh"
 
 # ---------------------------------------------------------------------------------------------
 # Defaults (override with flags or environment variables)
@@ -26,6 +28,7 @@ REPO_URL="${REPO_URL:-https://github.com/mostmark/inner-outer-loop-workshop-gito
 REVISION="${REVISION:-main}"
 GITOPS_CHANNEL="${GITOPS_CHANNEL:-gitops-1.21}"
 GUIDE_PART="${GUIDE_PART:-all}"
+WORKSHOP_CREDENTIALS_FILE="${WORKSHOP_CREDENTIALS_FILE:-}"
 TIMEOUT="${TIMEOUT:-3600}"
 WAIT=true
 
@@ -35,11 +38,16 @@ ROOT_APP=inner-outer-loop-workshop
 usage() {
   cat <<EOF
 Usage: WORKSHOP_USER_PASSWORD=<password> $0 [options]
+       $0 --credentials-file <file> [options]
 
 Options:
   --users N          Number of generated users <prefix>1..<prefix>N (default: ${USERS_COUNT})
   --prefix PREFIX    Prefix for generated user names (default: ${USERS_PREFIX})
   --names a,b,c      Explicit user names; when set, --users and --prefix are ignored
+  --credentials-file FILE
+                     Unique password per user: a file with one "username,password" per line
+                     (see README, "User Passwords"). Without it, all users share
+                     WORKSHOP_USER_PASSWORD.
   --guide-part PART  Lab guide content: all (Part 1 and Part 2), inner (Part 1 only) or
                      outer (Part 2 only) (default: ${GUIDE_PART}). Switch later with
                      set-guide-part.sh
@@ -50,8 +58,10 @@ Options:
   -h, --help         Show this help
 
 Environment:
-  WORKSHOP_USER_PASSWORD  Password of the pre-created workshop users (required). It is used for
-                          the users' Gitea accounts and is stored only in the cluster.
+  WORKSHOP_USER_PASSWORD     Password shared by all pre-created workshop users (default mode).
+  WORKSHOP_CREDENTIALS_FILE  Same as --credentials-file.
+  One of the two is required. The passwords are used for the users' Gitea accounts, their
+  workspaces and the lab guide URLs, and are stored only in the cluster.
 EOF
 }
 
@@ -61,6 +71,7 @@ while [[ $# -gt 0 ]]; do
     --prefix) USERS_PREFIX="$2"; shift 2 ;;
     --names) USERS_EXPLICIT_NAMES="$2"; shift 2 ;;
     --guide-part) GUIDE_PART="$2"; shift 2 ;;
+    --credentials-file) WORKSHOP_CREDENTIALS_FILE="$2"; shift 2 ;;
     --repo) REPO_URL="$2"; shift 2 ;;
     --revision) REVISION="$2"; shift 2 ;;
     --timeout) TIMEOUT="$2"; shift 2 ;;
@@ -78,12 +89,33 @@ die() { echo "Error: $*" >&2; exit 1; }
 # ---------------------------------------------------------------------------------------------
 command -v oc >/dev/null 2>&1 || die "'oc' CLI not found. Please install it first."
 oc whoami >/dev/null 2>&1 || die "Not logged in to OpenShift. Please run 'oc login' first."
-[[ -n "${WORKSHOP_USER_PASSWORD:-}" ]] || die "WORKSHOP_USER_PASSWORD is not set."
+if [[ -z "$WORKSHOP_CREDENTIALS_FILE" && -z "${WORKSHOP_USER_PASSWORD:-}" ]]; then
+  die "set WORKSHOP_USER_PASSWORD (shared password) or pass --credentials-file (one password per user)."
+fi
 [[ "$(oc auth can-i '*' '*' --all-namespaces)" == "yes" ]] || die "cluster-admin permissions are required."
 if [[ -z "$USERS_EXPLICIT_NAMES" ]] && ! [[ "$USERS_COUNT" =~ ^[1-9][0-9]*$ ]]; then
   die "--users must be a positive integer."
 fi
 [[ "$GUIDE_PART" =~ ^(all|inner|outer)$ ]] || die "--guide-part must be all, inner or outer."
+
+# The configured users, and their passwords when a credentials file is used: every user must be in
+# the file with a non-empty password, so that nobody silently gets a wrong or empty password.
+if [[ -n "$USERS_EXPLICIT_NAMES" ]]; then
+  CONFIGURED_USERS=$(echo "$USERS_EXPLICIT_NAMES" | tr ',' ' ')
+else
+  CONFIGURED_USERS=$(for i in $(seq 1 "$USERS_COUNT"); do printf '%s%s ' "$USERS_PREFIX" "$i"; done)
+fi
+if [[ -n "$WORKSHOP_CREDENTIALS_FILE" ]]; then
+  [[ -r "$WORKSHOP_CREDENTIALS_FILE" ]] || die "credentials file '$WORKSHOP_CREDENTIALS_FILE' is not readable."
+  missing=""
+  for user in $CONFIGURED_USERS; do
+    password=$(creds_file_password "$WORKSHOP_CREDENTIALS_FILE" "$user") && [[ -n "$password" ]] || missing="$missing $user"
+  done
+  [[ -z "$missing" ]] || die "no password in $WORKSHOP_CREDENTIALS_FILE for:$missing"
+  unset password
+  extra=$(creds_file_users "$WORKSHOP_CREDENTIALS_FILE" | while read -r user; do
+    [[ " $CONFIGURED_USERS " == *" $user "* ]] || printf '%s ' "$user"; done)
+fi
 
 log "Logged in as: $(oc whoami)"
 log "Server:       $(oc whoami --show-server)"
@@ -94,6 +126,13 @@ else
 fi
 log "Source:       ${REPO_URL}@${REVISION}"
 log "Lab guide:    ${GUIDE_PART} (all = Part 1 and Part 2, inner = Part 1 only, outer = Part 2 only)"
+if [[ -n "$WORKSHOP_CREDENTIALS_FILE" ]]; then
+  log "Passwords:    one per user, from ${WORKSHOP_CREDENTIALS_FILE}"
+  if [[ -n "${WORKSHOP_USER_PASSWORD:-}" ]]; then log "              (WORKSHOP_USER_PASSWORD is set but not used)"; fi
+  if [[ -n "$extra" ]]; then log "              (ignored, not configured users in the file: ${extra})"; fi
+else
+  log "Passwords:    shared (WORKSHOP_USER_PASSWORD)"
+fi
 
 wait_for() {
   # wait_for <description> <timeout-seconds> <command...>
@@ -201,10 +240,23 @@ EOF
 # room for the secrets. Argo CD adopts it on the first sync.
 log "Creating secrets in the gitea namespace"
 oc get namespace gitea >/dev/null 2>&1 || oc create namespace gitea >/dev/null
-# Participants' Gitea password (same as their OpenShift password).
-oc create secret generic workshop-user-password -n gitea \
-  --from-literal=userPassword="${WORKSHOP_USER_PASSWORD}" \
+# Participants' passwords (the same as their OpenShift passwords), used by the user-setup Job for
+# their Gitea accounts and workspace credentials: key userPassword (shared) or password.<user>.
+password_args=()
+if [[ -n "$WORKSHOP_CREDENTIALS_FILE" ]]; then
+  for user in $CONFIGURED_USERS; do
+    password_args+=("--from-literal=password.${user}=$(creds_file_password "$WORKSHOP_CREDENTIALS_FILE" "$user")")
+  done
+else
+  password_args+=("--from-literal=userPassword=${WORKSHOP_USER_PASSWORD}")
+fi
+oc create secret generic "$CREDENTIALS_SECRET_NAME" -n "$CREDENTIALS_SECRET_NAMESPACE" "${password_args[@]}" \
   --dry-run=client -o yaml | oc apply -f - >/dev/null
+unset password_args
+# A checksum of the passwords (not the passwords) goes into the root Application, so that Argo CD
+# re-runs the user-setup Job whenever the passwords change.
+CREDENTIALS_CHECKSUM=$(oc get secret "$CREDENTIALS_SECRET_NAME" -n "$CREDENTIALS_SECRET_NAMESPACE" -o jsonpath='{.data}' \
+  | { command -v sha256sum >/dev/null 2>&1 && sha256sum || shasum -a 256; } | cut -c1-16)
 # Gitea administrator password: random, generated once, never printed.
 if ! oc get secret gitea-admin-password -n gitea >/dev/null 2>&1; then
   # pipefail is disabled in the subshell because `head` closing the pipe makes `tr` exit with SIGPIPE.
@@ -228,13 +280,14 @@ sed -e "s|repoURL: .*|repoURL: ${REPO_URL}|" \
     -e "s|targetRevision: .*|targetRevision: ${REVISION}|" \
     "${SCRIPT_DIR}/argocd/application.yaml" \
   | awk -v count="$USERS_COUNT" -v prefix="$USERS_PREFIX" -v names="$EXPLICIT_NAMES_PARAM" \
-        -v repo="$REPO_URL" -v rev="$REVISION" -v part="$GUIDE_PART" '
+        -v repo="$REPO_URL" -v rev="$REVISION" -v part="$GUIDE_PART" -v checksum="$CREDENTIALS_CHECKSUM" '
       /- name: users.count/          { print; getline; sub(/value: .*/, "value: \"" count "\""); print; next }
       /- name: users.prefix/         { print; getline; sub(/value: .*/, "value: " prefix); print; next }
       /- name: users.explicitNames/  { print; getline; sub(/value: .*/, "value: \"" names "\""); print; next }
       /- name: source.repoURL/       { print; getline; sub(/value: .*/, "value: " repo); print; next }
       /- name: source.targetRevision/ { print; getline; sub(/value: .*/, "value: " rev); print; next }
       /- name: guidePart/            { print; getline; sub(/value: .*/, "value: " part); print; next }
+      /- name: workshopUsers.credentialsChecksum/ { print; getline; sub(/value: .*/, "value: \"" checksum "\""); print; next }
       { print }' \
   | oc apply -f -
 
@@ -250,7 +303,7 @@ print_url_template() {
   echo "https://${host:-<lab-guide-route-host>}?OPENSHIFT_USERNAME={username}&OPENSHIFT_PASSWORD={openshift_password}&OPENSHIFT_CONSOLE_URL={openshift_console_hostname}&OPENSHIFT_API_URL={openshift_api_url}"
   echo
   echo "Print ready-to-use URLs for every participant with:"
-  echo "  WORKSHOP_USER_PASSWORD=... ${SCRIPT_DIR}/print-user-urls.sh"
+  echo "  ${SCRIPT_DIR}/print-user-urls.sh        (reads the passwords from the cluster)"
   echo "============================================"
 }
 

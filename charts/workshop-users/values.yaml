@@ -6,6 +6,10 @@ users:
   explicitNames: []
 
 setupNamespace: workshop-setup
+
+# Checksum of the Secret with the users' passwords (gitea/workshop-user-password), set by
+# bootstrap.sh. A change makes Argo CD sync again, which re-runs the user-setup Job.
+credentialsChecksum: ""
 jobImage: image-registry.openshift-image-registry.svc:5000/openshift/cli:latest
 
 # Participant Argo CD instance (platform chart).

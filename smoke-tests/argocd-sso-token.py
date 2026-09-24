@@ -4,8 +4,9 @@ Dex -> OpenShift OAuth -> identity provider login form -> OAuth consent -> back 
 prints the resulting Argo CD session token (the argocd.token cookie). Used by isolation-check.sh
 to verify the SSO path and its RBAC mapping.
 
-Usage: WORKSHOP_USER_PASSWORD=... argocd-sso-token.py <username> <apps-domain> [argocd-route-host-prefix]
-       (default prefix: argocd-server-argocd, the participant instance)
+Usage: WORKSHOP_USER_PASSWORD=<the user's password> argocd-sso-token.py <username> <apps-domain> [argocd-route-host-prefix]
+       (default prefix: argocd-server-argocd, the participant instance; isolation-check.sh sets
+       WORKSHOP_USER_PASSWORD to the user's own password, also when users have different ones)
 Supports the Keycloak login form (kc-form-login) and the OpenShift htpasswd/basic login page.
 """
 import html

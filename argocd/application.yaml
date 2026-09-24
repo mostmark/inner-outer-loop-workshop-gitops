@@ -23,6 +23,10 @@ spec:
           value: "null"
         - name: guidePart
           value: all
+        # Set by bootstrap.sh: a checksum (not the content) of the users' passwords, so that a
+        # password change re-runs the user-setup Job.
+        - name: workshopUsers.credentialsChecksum
+          value: ""
         - name: source.repoURL
           value: https://github.com/mostmark/inner-outer-loop-workshop-gitops.git
         - name: source.targetRevision

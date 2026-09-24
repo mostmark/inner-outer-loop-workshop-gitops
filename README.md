@@ -28,6 +28,7 @@ and the example code in [inner-outer-loop-workshop-code](https://github.com/most
 │   └── lab-guide/                # lab guide deployment and URL template
 ├── bootstrap.sh                  # the only imperative step
 ├── cleanup.sh                    # removes the workshop
+├── lib/credentials.sh            # user passwords (shared or per user), used by the scripts
 ├── print-user-urls.sh            # prints each participant's lab guide URL
 ├── set-guide-part.sh             # shows Part 1, Part 2 or both in the lab guide
 ├── smoke-tests/                  # platform-check.sh, user-journey.sh, isolation-check.sh
@@ -77,8 +78,10 @@ The `openshift-gitops` instance is admin-only. Participants have no access to it
 - OpenShift 4.22 on x86_64 (the workshop does not support ARM), with a default storage class and
   the internal image registry enabled.
 - Cluster-admin access with `oc`.
-- The workshop users already exist in the cluster's identity provider and share one password,
-  passed as `WORKSHOP_USER_PASSWORD`. The users must be able to log in with `oc login -u -p`.
+- The workshop users already exist in the cluster's identity provider, either with one shared
+  password (`WORKSHOP_USER_PASSWORD`, the default) or with a password per user (a credentials
+  file, see [User Passwords](#user-passwords)). The users must be able to log in with
+  `oc login -u -p`. Passwords must have at least 8 characters (Gitea's minimum).
 - No existing `cluster-monitoring-config` ConfigMap in `openshift-monitoring` (Argo CD owns it to
   enable user workload monitoring). If you have one, merge `enableUserWorkload: true` into
   `charts/workshop-platform/templates/monitoring.yaml` first.
@@ -95,7 +98,13 @@ Synced and Healthy and prints the lab guide URL template. A fresh install took a
 on the test cluster (operators about 4, platform about 4, users about 1), plus 2 to 3 minutes until
 the pre-started workspaces are running.
 
-Options: `--users N`, `--prefix PREFIX`, `--names a,b,c`, `--guide-part all|inner|outer`,
+With a password per user, pass the credentials file instead of `WORKSHOP_USER_PASSWORD`:
+
+```bash
+./bootstrap.sh --users 20 --credentials-file users.csv
+```
+
+Options: `--users N`, `--prefix PREFIX`, `--names a,b,c`, `--credentials-file FILE`, `--guide-part all|inner|outer`,
 `--repo URL`, `--revision REV`, `--timeout SECONDS`, `--no-wait`. `GITOPS_CHANNEL` overrides the OpenShift GitOps channel
 (`gitops-1.21`).
 
@@ -150,6 +159,58 @@ ignored. The root chart passes the `users` block to every child chart.
 To add participants during a workshop, run `bootstrap.sh` again with the new count (or change
 the parameter in Argo CD). Removing participants prunes their namespaces.
 
+## User Passwords
+
+The workshop does not create the participants' OpenShift users; it uses the users of the
+cluster's identity provider and needs their passwords for the participants' Gitea accounts, their
+workspaces (`oc login` and Gitea access from the devfile commands) and the lab guide URLs.
+
+| Mode | When | How |
+|---|---|---|
+| Shared password (default) | All users have the same password, as on most workshop clusters | `export WORKSHOP_USER_PASSWORD='...'` |
+| One password per user | The cluster's users have different passwords | `--credentials-file users.csv` or `export WORKSHOP_CREDENTIALS_FILE=users.csv` |
+
+`bootstrap.sh` needs one of the two. If both are set, the credentials file is used and
+`WORKSHOP_USER_PASSWORD` is ignored (the script says so); there is no fallback from the file to
+the shared password.
+
+The credentials file has one `username,password` line per user:
+
+```text
+username,password
+user1,first-users-password
+user2,another password, with a comma
+```
+
+The header line, empty lines and lines starting with `#` are ignored. The password is everything
+after the first comma, so it may contain commas and spaces (not a line break); Windows line
+endings are fine. Every configured user (`--users`, `--prefix`, `--names`) must be in the file with
+a password of at least 8 characters, otherwise `bootstrap.sh` stops and lists the users without a
+password. Users in the file that are not configured are ignored. Keep the file out of Git.
+
+`bootstrap.sh` stores the passwords only in the cluster, in Secret `workshop-user-password` in
+namespace `gitea` (key `userPassword` for the shared password, `password.<user>` per user).
+`print-user-urls.sh` and the smoke tests read the passwords from there when you are logged in as
+cluster-admin, so they need neither the environment variable nor the file (both still take
+precedence when set, and every script accepts `--credentials-file`).
+
+To change passwords or switch the mode on an installed workshop, update the users in the
+identity provider, then run `bootstrap.sh` again with the new password or file. It stores a
+checksum of the passwords on the root Application, so Argo CD re-runs the user setup, which updates
+the Gitea accounts and the workspace credentials. Running workspaces read the credentials at
+start, so restart them afterwards:
+
+```bash
+for ns in $(oc get ns -o name | grep '^namespace/devspaces-' | cut -d/ -f2); do
+  oc patch dw wksp-end-to-end-dev -n "$ns" --type merge -p '{"spec":{"started":false}}'
+  oc wait dw wksp-end-to-end-dev -n "$ns" --for=jsonpath='{.status.phase}'=Stopped --timeout=120s
+  oc patch dw wksp-end-to-end-dev -n "$ns" --type merge -p '{"spec":{"started":true}}'
+done
+```
+
+`platform-check.sh` verifies that every user's workspace Secret has the user's current password
+(the Secret; a workspace that was running during the change still needs the restart).
+
 ## Running the Workshop as One Event or on Two Days
 
 The workshop has two parts: Part 1 Inner Loop and Part 2 Outer Loop, each about half a day. The
@@ -203,7 +264,7 @@ from `guidePart`, selects the one httpd serves.
 
 Also per user: Argo CD AppProject `cn-project-<user>` (namespace `argocd`) and RBAC role, an
 Argo CD local account with the `apiKey` capability only, and a Gitea account with the workshop
-password.
+password (the shared one or the user's own).
 
 To create the workspaces without starting them, set `workshopUsers.devspaces.prestartWorkspaces`
 to `false` in `charts/workshop/values.yaml`.
@@ -259,17 +320,22 @@ namespace. The guide derives the apps domain from the console host name. To prin
 ready-to-use URL of every participant:
 
 ```bash
-WORKSHOP_USER_PASSWORD='...' ./print-user-urls.sh          # or --csv
+./print-user-urls.sh          # or --csv; as cluster-admin, reads the passwords from the cluster
 ```
 
 ## Smoke Tests
 
 ```bash
-./smoke-tests/platform-check.sh                             # as cluster-admin
-WORKSHOP_USER_PASSWORD='...' ./smoke-tests/user-journey.sh user1
-WORKSHOP_USER_PASSWORD='...' ./smoke-tests/isolation-check.sh user1 user2
-WORKSHOP_USER_PASSWORD='...' ./smoke-tests/user-journey.sh user1 --reset   # back to the initial state
+# All as cluster-admin: the scripts read each user's password from the cluster
+# (WORKSHOP_USER_PASSWORD or --credentials-file take precedence when given).
+./smoke-tests/platform-check.sh
+./smoke-tests/user-journey.sh user1
+./smoke-tests/isolation-check.sh user1 user2
+./smoke-tests/user-journey.sh user1 --reset   # back to the initial state
 ```
+
+`user-journey.sh` and `isolation-check.sh` log in as the participants with their own passwords
+(different ones per user in per-user mode), not through impersonation.
 
 `user-journey.sh` logs in as the participant and runs the devfile commands and the guide's steps
 inside the participant's workspace, for both parts. It takes 30 to 45 minutes on a fresh cluster
@@ -314,7 +380,8 @@ helm lint charts/workshop-users --set 'users.explicitNames={alice,bob}'
 | Kiali operator does not install | Its InstallPlan needs approval; the `approve-kiali-ossm` Job in `workshop-setup` does that for the pinned CSV only. Check its log. |
 | A workspace is `Failed` | `oc get dw -n devspaces-<user>`. Stop and start it from the Dev Spaces dashboard, or `oc patch dw wksp-end-to-end-dev -n devspaces-<user> --type merge -p '{"spec":{"started":true}}'` after fixing the cause. |
 | Kiali graph is empty | User workload monitoring must be running (`oc get pods -n openshift-user-workload-monitoring`), and metrics lag 1 to 2 minutes (30 s scrape interval). |
-| `oc login -u` fails for participants | The identity provider must accept the password for the CLI; check the users' passwords in the IdP match `WORKSHOP_USER_PASSWORD`. |
+| `oc login -u` fails for participants | The identity provider must accept the password for the CLI; check the users' passwords in the IdP match `WORKSHOP_USER_PASSWORD` or the credentials file (see [User Passwords](#user-passwords)). |
+| Devfile commands or `git push` fail with authentication errors after a password change | The workspace still has the old password; restart it (see [User Passwords](#user-passwords)). |
 | Participant cannot see their Applications in Argo CD | They must use "LOG IN VIA OPENSHIFT" with their workshop user; Applications must be in project `cn-project-<user>`. |
 | The lab guide still shows the old part after `set-guide-part.sh` | Check `oc get deployment lab-guide -n lab-guide -o yaml` for `WORKSHOP_PART`, and whether the root Application is Synced. Browsers may show a cached page; reload it. |
 | `cleanup.sh` waits for namespaces | A finalizer is stuck; `oc get <kind> -n <namespace>` for the objects listed. Operators must still be running while their objects are deleted, which is why the operator namespaces are kept until the end. |

@@ -4,3 +4,6 @@
 
 # Working notes of the migration (consolidated into migration/*.md)
 migration/drafts/
+
+# Credentials files with the users' passwords (bootstrap.sh --credentials-file)
+*.csv

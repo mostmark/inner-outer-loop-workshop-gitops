@@ -1,7 +1,7 @@
 #!/bin/bash
 #
 # Walks one participant through the key exercises of both parts, the way participants do: logged
-# in as that user (WORKSHOP_USER_PASSWORD), running the devfile commands and the guide's steps
+# in as that user with the user's password, running the devfile commands and the guide's steps
 # inside the user's own running Dev Spaces workspace. Prints PASS/FAIL per step.
 #
 # Inner Loop: login, project, Inventory (Quarkus), Catalog (Spring Boot), Gateway (.NET),
@@ -9,13 +9,16 @@
 # Outer Loop: push to Gitea, CI pipeline, GitOps export and Argo CD sync in the participant
 #             instance, CD pipelines, Service Mesh (sidecars, gateway, traffic, Kiali graph).
 #
-# Usage: WORKSHOP_USER_PASSWORD=... ./user-journey.sh <username> [--reset] [--keep-going] [--outer-only]
+# Usage: ./user-journey.sh <username> [--reset] [--keep-going] [--outer-only] [--credentials-file FILE]
 #   --reset       only return the user to the initial state (removes the user's Coolstore
 #                 resources, Argo CD Applications/repositories, Gitea repositories and local
 #                 changes in the workspace), then exit
 #   --keep-going  continue after a failed step (default: stop at the first failure)
 #   --outer-only  skip Part 1 (expects the Part 1 state in my-project-<user>, e.g. after
 #                 the devfile command "Inner Loop - Deploy Coolstore")
+# Passwords: --credentials-file FILE / WORKSHOP_CREDENTIALS_FILE (one password per user), else
+# WORKSHOP_USER_PASSWORD (shared), else the Secret bootstrap.sh stored in the cluster (needs
+# cluster-admin). See lib/credentials.sh and the README section "User Passwords".
 # Exit code: number of failed steps.
 
 set -uo pipefail
@@ -23,22 +26,29 @@ set -uo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=lib.sh
 source "${SCRIPT_DIR}/lib.sh"
+# shellcheck source=../lib/credentials.sh
+source "${SCRIPT_DIR}/../lib/credentials.sh"
 
 USERNAME=""
 RESET=false
 KEEP_GOING=false
 OUTER_ONLY=false
-for arg in "$@"; do
-  case "$arg" in
+while [[ $# -gt 0 ]]; do
+  case "$1" in
     --reset) RESET=true ;;
     --outer-only) OUTER_ONLY=true ;;
     --keep-going) KEEP_GOING=true ;;
-    -h|--help) sed -n '3,21p' "$0"; exit 0 ;;
-    *) USERNAME="$arg" ;;
+    --credentials-file) WORKSHOP_CREDENTIALS_FILE="$2"; shift ;;
+    -h|--help) sed -n '3,24p' "$0"; exit 0 ;;
+    *) USERNAME="$1" ;;
   esac
+  shift
 done
 [[ -n "$USERNAME" ]] || { echo "Usage: $0 <username> [--reset] [--keep-going]" >&2; exit 1; }
-[[ -n "${WORKSHOP_USER_PASSWORD:-}" ]] || { echo "Error: WORKSHOP_USER_PASSWORD is not set." >&2; exit 1; }
+creds_check_source || exit 1
+# Read before logging in as the user: the cluster Secret fallback needs the admin login.
+PASSWORD=$(user_password "$USERNAME") && [[ -n "$PASSWORD" ]] \
+  || { echo "Error: no password for $USERNAME (credentials file, WORKSHOP_USER_PASSWORD or cluster Secret)." >&2; exit 1; }
 
 API=$(oc whoami --show-server 2>/dev/null)
 DOMAIN=$(oc get ingresses.config cluster -o jsonpath='{.spec.domain}' 2>/dev/null)
@@ -64,8 +74,8 @@ step() {
 
 # ---------------------------------------------------------------------------------------------
 section "Log in as ${USERNAME}"
-step "oc login as ${USERNAME} with the workshop password" \
-  oc login "$API" -u "$USERNAME" -p "$WORKSHOP_USER_PASSWORD" --insecure-skip-tls-verify=true
+step "oc login as ${USERNAME} with the user's password" \
+  oc login "$API" -u "$USERNAME" -p "$PASSWORD" --insecure-skip-tls-verify=true
 step "oc whoami is ${USERNAME}" test "$(oc whoami)" = "$USERNAME"
 
 # The participant's workspace: start it if it is stopped (as the dashboard would) and wait.

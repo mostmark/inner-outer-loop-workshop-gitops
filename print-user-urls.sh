@@ -4,9 +4,16 @@
 # them out. The users are read from the root Application (the same parameters bootstrap.sh set)
 # unless --users/--prefix/--names are given.
 #
-# Usage: WORKSHOP_USER_PASSWORD=<password> ./print-user-urls.sh [--users N] [--prefix P] [--names a,b] [--csv]
+# Usage: ./print-user-urls.sh [--users N] [--prefix P] [--names a,b] [--credentials-file FILE] [--csv]
+#
+# Passwords come from (in this order) --credentials-file / WORKSHOP_CREDENTIALS_FILE,
+# WORKSHOP_USER_PASSWORD, or the cluster Secret that bootstrap.sh created (needs cluster-admin).
 
 set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=lib/credentials.sh
+source "${SCRIPT_DIR}/lib/credentials.sh"
 
 GITOPS_NAMESPACE=openshift-gitops
 ROOT_APP=inner-outer-loop-workshop
@@ -21,14 +28,15 @@ while [[ $# -gt 0 ]]; do
     --prefix) USERS_PREFIX="$2"; shift 2 ;;
     --names) USERS_EXPLICIT_NAMES="$2"; shift 2 ;;
     --csv) FORMAT=csv; shift ;;
-    -h|--help) sed -n '3,8p' "$0"; exit 0 ;;
+    --credentials-file) WORKSHOP_CREDENTIALS_FILE="$2"; shift 2 ;;
+    -h|--help) sed -n '3,11p' "$0"; exit 0 ;;
     *) echo "Unknown option: $1" >&2; exit 1 ;;
   esac
 done
 
 command -v oc >/dev/null 2>&1 || { echo "Error: 'oc' CLI not found." >&2; exit 1; }
 oc whoami >/dev/null 2>&1 || { echo "Error: not logged in to OpenShift." >&2; exit 1; }
-[[ -n "${WORKSHOP_USER_PASSWORD:-}" ]] || { echo "Error: WORKSHOP_USER_PASSWORD is not set." >&2; exit 1; }
+creds_check_source || exit 1
 
 # Users from the root Application's Helm parameters, unless given on the command line.
 param() {
@@ -65,10 +73,11 @@ urlencode() {
   done
   echo "$out"
 }
-PASSWORD=$(urlencode "$WORKSHOP_USER_PASSWORD")
-
 [[ "$FORMAT" == "csv" ]] && echo "username,lab_guide_url"
 for user in $USERS; do
+  password=$(user_password "$user") && [[ -n "$password" ]] \
+    || { echo "Error: no password for $user (credentials file, WORKSHOP_USER_PASSWORD or cluster Secret)." >&2; exit 1; }
+  PASSWORD=$(urlencode "$password")
   url="https://${LAB_GUIDE_HOST}?OPENSHIFT_USERNAME=$(urlencode "$user")&OPENSHIFT_PASSWORD=${PASSWORD}&OPENSHIFT_CONSOLE_URL=${CONSOLE_HOST}&OPENSHIFT_API_URL=${API_HOST}"
   if [[ "$FORMAT" == "csv" ]]; then
     echo "${user},${url}"

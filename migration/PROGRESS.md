@@ -38,7 +38,8 @@
 
 - 2026-09-24: lab guide part selection for two-day events (`guidePart`, `--guide-part`,
   `set-guide-part.sh`, DECISIONS D19), tested on the cluster (FINAL-REPORT section 5).
-- Next topic to discuss with the owner: unique passwords per user (credentials file proposal).
+- 2026-09-24: per-user passwords (`--credentials-file`, `lib/credentials.sh`, DECISIONS D20);
+  shared `WORKSHOP_USER_PASSWORD` stays the default. Cluster tests: see FINAL-REPORT section 5.
 
 ## Next
 

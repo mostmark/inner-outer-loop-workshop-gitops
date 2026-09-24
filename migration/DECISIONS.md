@@ -234,3 +234,20 @@ restarts the lab guide pod; participants keep their URLs and their work. Hiding 
 client-side (URL parameter, CSS) was rejected because it is easy to get around. Provisioning is
 not split by part: Part 2 needs the whole platform, and installing everything once keeps day 2
 free of setup time. The GitHub Pages preview shows the whole workshop.
+
+## D20. Shared or per-user passwords
+
+The old workshop assumed one password for all users. Some clusters give every user their own
+password, so the workshop now supports both, with the shared password staying the default:
+`WORKSHOP_USER_PASSWORD` as before, or `--credentials-file` / `WORKSHOP_CREDENTIALS_FILE` with one
+`username,password` line per user. A file was chosen over environment variables per user because
+it scales to any number of users and can be exported from wherever the event's accounts are
+managed. Both set: the file wins, with a note, and there is no fallback to the shared password,
+so a user missing from the file stops `bootstrap.sh` instead of silently getting a wrong password.
+The passwords are stored only in the cluster (Secret `gitea/workshop-user-password`, key
+`userPassword` or `password.<user>`); the user-setup Job reads the user's own key first. A
+checksum of the Secret (not the passwords) is a Helm parameter on the root Application, so a
+password change makes the users Application OutOfSync and re-runs the user-setup Job (Argo CD
+hooks alone would not notice a changed Secret). `print-user-urls.sh` and the smoke tests share
+`lib/credentials.sh` and fall back to reading the cluster Secret as cluster-admin, so instructors
+do not need to keep the passwords at hand after bootstrapping.

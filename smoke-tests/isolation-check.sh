@@ -1,10 +1,14 @@
 #!/bin/bash
 #
 # Confirms that one participant cannot see or modify another participant's namespaces, Argo CD
-# Applications or Gitea repositories. Logs in as both users with their real credentials
-# (WORKSHOP_USER_PASSWORD), not through impersonation.
+# Applications or Gitea repositories. Logs in as both users with their real credentials, not
+# through impersonation.
 #
-# Usage: WORKSHOP_USER_PASSWORD=... ./isolation-check.sh <user-a> <user-b>   (default: user1 user2)
+# Usage: ./isolation-check.sh [<user-a> <user-b>] [--credentials-file FILE]   (default: user1 user2)
+#
+# Passwords: --credentials-file FILE / WORKSHOP_CREDENTIALS_FILE (one password per user), else
+# WORKSHOP_USER_PASSWORD (shared), else the Secret bootstrap.sh stored in the cluster (needs
+# cluster-admin). See lib/credentials.sh and the README section "User Passwords".
 # Exit code: number of failed checks.
 
 set -uo pipefail
@@ -12,10 +16,22 @@ set -uo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=lib.sh
 source "${SCRIPT_DIR}/lib.sh"
+# shellcheck source=../lib/credentials.sh
+source "${SCRIPT_DIR}/../lib/credentials.sh"
 
-A="${1:-user1}"
-B="${2:-user2}"
-[[ -n "${WORKSHOP_USER_PASSWORD:-}" ]] || { echo "Error: WORKSHOP_USER_PASSWORD is not set." >&2; exit 1; }
+USERS_ARGS=()
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --credentials-file) WORKSHOP_CREDENTIALS_FILE="$2"; shift 2 ;;
+    -h|--help) sed -n '3,12p' "$0"; exit 0 ;;
+    *) USERS_ARGS+=("$1"); shift ;;
+  esac
+done
+A="${USERS_ARGS[0]:-user1}"
+B="${USERS_ARGS[1]:-user2}"
+creds_check_source || exit 1
+PW_A=$(user_password "$A") && [[ -n "$PW_A" ]] || { echo "Error: no password for $A." >&2; exit 1; }
+PW_B=$(user_password "$B") && [[ -n "$PW_B" ]] || { echo "Error: no password for $B." >&2; exit 1; }
 API=$(oc whoami --show-server 2>/dev/null)
 DOMAIN=$(oc get ingresses.config cluster -o jsonpath='{.spec.domain}' 2>/dev/null)
 [[ -n "$API" && -n "$DOMAIN" ]] || { echo "Error: log in to the cluster first." >&2; exit 1; }
@@ -26,10 +42,11 @@ WORK=$(mktemp -d)
 trap 'rm -rf "$WORK"' EXIT
 
 as() { KUBECONFIG="${WORK}/$1" oc "${@:2}"; }  # as <user> <oc args...>
-login() { KUBECONFIG="${WORK}/$1" oc login "$API" -u "$1" -p "$WORKSHOP_USER_PASSWORD" --insecure-skip-tls-verify=true >/dev/null 2>&1; }
+pw() { if [[ "$1" == "$A" ]]; then printf '%s' "$PW_A"; else printf '%s' "$PW_B"; fi; }  # pw <user>
+login() { KUBECONFIG="${WORK}/$1" oc login "$API" -u "$1" -p "$(pw "$1")" --insecure-skip-tls-verify=true >/dev/null 2>&1; }
 denied() { ! "$@" >/dev/null 2>&1; }
 code() { curl -sk -o /dev/null -w '%{http_code}' --max-time 20 -H 'Content-Type: application/json' "$@"; }
-gitea_code() { local u="$1"; shift; code -u "${u}:${WORKSHOP_USER_PASSWORD}" "$@"; }
+gitea_code() { local u="$1"; shift; code -u "${u}:$(pw "$u")" "$@"; }
 
 section "Log in"
 check "Log in as $A" login "$A"
@@ -80,7 +97,7 @@ code -X DELETE -H "Authorization: Bearer $TOKEN_A" "$ARGOCD/applications/isolati
 code -X DELETE -H "Authorization: Bearer $TOKEN_B" "$ARGOCD/applications/isolation-probe-$B?cascade=false" >/dev/null
 
 section "Argo CD SSO (LOG IN VIA OPENSHIFT): $A vs $B"
-SSO_A=$("${SCRIPT_DIR}/argocd-sso-token.py" "$A" "$DOMAIN" 2>/dev/null)
+SSO_A=$(WORKSHOP_USER_PASSWORD="$PW_A" "${SCRIPT_DIR}/argocd-sso-token.py" "$A" "$DOMAIN" 2>/dev/null)
 check "$A logs in to Argo CD through OpenShift" test -n "$SSO_A"
 check "$A's SSO session is mapped to user $A" bash -c \
   "curl -sk -H 'Cookie: argocd.token=$SSO_A' '$ARGOCD/session/userinfo' | grep -q '\"username\":\"$A\"'"
@@ -89,7 +106,7 @@ check "$A (SSO) cannot read $B's project" test "$(code -H "Cookie: argocd.token=
 check "$A (SSO) cannot create an Application in $B's project" test "$(code -X POST -H "Cookie: argocd.token=$SSO_A" \
   -d "$(probe_app "isolation-probe-z" "cn-project-$B" "cn-project-$B")" "$ARGOCD/applications?validate=false")" = 403
 GITOPS="https://openshift-gitops-server-openshift-gitops.${DOMAIN}/api/v1"
-SSO_GITOPS_A=$("${SCRIPT_DIR}/argocd-sso-token.py" "$A" "$DOMAIN" openshift-gitops-server-openshift-gitops 2>/dev/null)
+SSO_GITOPS_A=$(WORKSHOP_USER_PASSWORD="$PW_A" "${SCRIPT_DIR}/argocd-sso-token.py" "$A" "$DOMAIN" openshift-gitops-server-openshift-gitops 2>/dev/null)
 check "$A (SSO) sees no Applications in the admin-only openshift-gitops instance" bash -c \
   "[ -n '$SSO_GITOPS_A' ] && curl -sk -H 'Cookie: argocd.token=$SSO_GITOPS_A' '$GITOPS/applications' | grep -q '\"items\":null\|\"items\":\[\]'"
 check "$A (SSO) cannot read the root Application in openshift-gitops" test \
@@ -106,7 +123,7 @@ check "$A cannot change $B's repository settings" test "$(gitea_code "$A" -X PAT
 check "$A cannot use the admin API" test "$(gitea_code "$A" "$GITEA/admin/users")" = 403
 check "$A cannot push over git to $B's repository" bash -c \
   "cd $WORK && git init -q -b main push && cd push && git commit -q --allow-empty -m probe &&
-   git -c http.sslVerify=false push 'https://$A:$(printf %s "$WORKSHOP_USER_PASSWORD" | jq -sRr @uri)@gitea-server-gitea.${DOMAIN}/$B/isolation-probe.git' main:refs/heads/probe 2>&1 |
+   git -c http.sslVerify=false push 'https://$A:$(printf %s "$PW_A" | jq -sRr @uri)@gitea-server-gitea.${DOMAIN}/$B/isolation-probe.git' main:refs/heads/probe 2>&1 |
    grep -q -i -E '403|denied|not allowed|permission'"
 gitea_code "$B" -X DELETE "$GITEA/repos/$B/isolation-probe" >/dev/null
 

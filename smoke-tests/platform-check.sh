@@ -16,6 +16,8 @@ set -uo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=lib.sh
 source "${SCRIPT_DIR}/lib.sh"
+# shellcheck source=../lib/credentials.sh
+source "${SCRIPT_DIR}/../lib/credentials.sh"
 
 parse_user_args "$@"
 require_admin
@@ -83,6 +85,10 @@ for user in $USERS; do
   check "$user: Argo CD token secret" bash -c "oc get secret argocd-env-secret -n cn-project-$user >/dev/null"
   check "$user: workspace credentials" bash -c \
     "oc get secret workshop-credentials workshop-git-credentials -n devspaces-$user >/dev/null && oc get configmap workshop-env -n devspaces-$user >/dev/null"
+  # The password bootstrap.sh stored for the user (shared or per user) reached the workspace.
+  check "$user: workspace has the user's current password" bash -c \
+    "[ -n \"\$1\" ] && [ \"\$(oc get secret workshop-credentials -n devspaces-$user -o jsonpath='{.data.WORKSHOP_PASSWORD}' | base64 -d)\" = \"\$1\" ]" \
+    _ "$(creds_cluster_password "$user" 2>/dev/null)"
   check "$user: PodMonitor for Istio proxies" bash -c "oc get podmonitor istio-proxies-monitor -n cn-project-$user >/dev/null"
   check "$user: Gitea account" in_cluster_http "http://gitea-server.gitea.svc:3000/api/v1/users/$user" 200
   started=$(oc get dw wksp-end-to-end-dev -n "devspaces-$user" -o jsonpath='{.spec.started}' 2>/dev/null)
@@ -99,8 +105,9 @@ GUIDE=$(oc get route doc -n lab-guide -o jsonpath='{.spec.host}')
 check "URL template ConfigMap" bash -c "oc get configmap lab-guide-url-template -n lab-guide -o jsonpath='{.data.url-template}' | grep -q OPENSHIFT_USERNAME"
 check_http "Start page" "https://${GUIDE}/modules/index.html" 200
 first_user=$(echo "$USERS" | awk '{print $1}')
-if [[ -n "${WORKSHOP_USER_PASSWORD:-}" && -n "$first_user" ]]; then
-  url=$("${SCRIPT_DIR}/../print-user-urls.sh" --names "$first_user" | awk '{print $2}')
+if [[ -n "$first_user" ]]; then
+  # Passwords from WORKSHOP_CREDENTIALS_FILE, WORKSHOP_USER_PASSWORD or the cluster Secret.
+  url=$("${SCRIPT_DIR}/../print-user-urls.sh" --names "$first_user" 2>/dev/null | awk '{print $2}')
   check "print-user-urls.sh prints a URL for $first_user" test -n "$url"
   check "Per-user URL renders" bash -c "curl -skf '$url' >/dev/null"
 fi
