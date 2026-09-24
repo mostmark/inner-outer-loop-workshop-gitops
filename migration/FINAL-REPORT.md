@@ -14,7 +14,7 @@ All output below is verbatim from the scripts in this repository.
 | 3 | Lab guide image built, pushed, anonymously pullable, deployed by the chart | Done | section 3 |
 | 4 | `bootstrap.sh` alone provisions the workshop; all Applications Synced and Healthy | Done | section 4 |
 | 5 | `platform-check.sh` (3 users), `user-journey.sh user1`, `isolation-check.sh` pass | Done | section 5 |
-| 6 | Cleanup removes the workshop; a second bootstrap from scratch succeeds | Done | section 4 |
+| 6 | Cleanup removes the workshop; a second bootstrap from scratch succeeds | Done | section 4 (one-pass cleanup with participant content, then bootstrap from scratch) |
 | 7 | `helm lint` and `helm template` pass for all value variants | Done | section 6 |
 | 8 | Documentation | Done | section 8 |
 
@@ -29,15 +29,15 @@ All output below is verbatim from the scripts in this repository.
 Checks run on the final state (all empty):
 
 ```text
-$ grep -rE "%[A-Z_]+%" inner-outer-loop-workshop inner-outer-loop-workshop-code
+$ grep -rE "[%][A-Z_]+%" inner-outer-loop-workshop inner-outer-loop-workshop-code
 matches: 0
-$ grep -rniE "RedHat-EMEA-SSA-Team|redhat-scholars" <all three repos> | grep -v migration/MIGRATION.md
+$ grep -rniE "[R]edHat-EMEA-SSA-Team|[r]edhat-scholars" <all three repos> | grep -v migration/MIGRATION.md
 matches: 0
-$ grep -rniE "opentlc|username-distribution|workshop-infra" <content, code, gitops charts/scripts/argocd> (excluding .claude/ tooling docs copied from the reference)
+$ grep -rniE "[o]pentlc|[u]sername-distribution|[w]orkshop-infra" <content, code, gitops charts/scripts/argocd> (excluding .claude/ tooling docs copied from the reference)
 matches: 0
-$ grep -rnE "(targetRevision|revision): *[0-9]|github.com/[^ ]*/(blob|tree)/[0-9]|/6\.[0-9]+/|#6\.[0-9]" <all three repos, excluding migration/>
+$ grep -rnE "([t]argetRevision|[r]evision): *[0-9]|github[.]com/[^ ]*/(blob|tree)/[0-9]|/[6][.][0-9]+/|#[6][.][0-9]" <all three repos, excluding migration/>
 matches: 0
-$ grep -rn "targetRevision" inner-outer-loop-workshop-gitops (values)
+$ grep -rhn "targetRevision" argocd/ charts/workshop/values.yaml
 12:    targetRevision: main
 26:        - name: source.targetRevision
 8:# Git source of the component charts. bootstrap.sh overrides repoURL/targetRevision when needed.
@@ -72,62 +72,107 @@ quay.io/mostmark/inner-outer-loop-lab:latest
 The lab guide Deployment runs this image (`quay.io/mostmark/inner-outer-loop-lab:latest`,
 `imagePullPolicy: Always`), and `platform-check.sh` fetches all 15 pages from its route.
 
-## 4. Provisioning, cleanup and the second bootstrap
+## 4. Provisioning, cleanup and bootstrap from scratch
 
-First bootstrap (development iterations) was followed by a full cleanup and a second bootstrap
-from scratch with `./bootstrap.sh --users 3` and no other step.
+The workshop was bootstrapped four times on the test cluster; every bootstrap after the first ran
+on a cluster cleaned by `cleanup.sh` and needed no other step than `./bootstrap.sh --users 3`.
+The cleanup script was hardened between the runs (see "Cleanup history" below); the evidence here
+is from the final scripts:
 
-Cleanup (`./cleanup.sh --yes`, first run):
+1. bootstrap #3 from scratch, then `user-journey.sh user1` (so participant content exists),
+2. one-pass `./cleanup.sh --yes` of that complete installation, which ends by verifying that no
+   workshop namespace, operator, CRD, webhook or cluster addition is left (non-zero exit otherwise),
+3. bootstrap #4 from scratch, then the platform and isolation checks of section 5.
+
+Bootstrap #3 (from a cleaned cluster):
 
 ```text
-[05:13:14] Logged in as: admin
-[05:13:14] Server:       https://api.cluster-khd65.dyn.redhatworkshops.io:6443
-[05:13:14] Deleting the root Application inner-outer-loop-workshop (Argo CD prunes everything it manages)
-[05:15:56] workshop Applications: gone
-[05:16:00] workshop namespaces: gone
-[05:16:00] Removing TektonConfig (lets the Pipelines operator clean up openshift-pipelines)
-[05:16:04] Removing operator Subscriptions and ClusterServiceVersions
-[05:16:18] Removing operator namespaces kept during the Argo CD cleanup
-[05:16:18] Removing objects the operators created themselves
-[05:16:26] Disabled console plugin pipelines-console-plugin
-[05:16:28] Removed openshift/java:openjdk-21-ubi9
-[05:16:28] Removing the operators' CRDs
-[05:16:39] Removing OpenShift GitOps
-[05:22:09] operator namespaces: gone
+[06:27:21] Logged in as: admin
+[06:27:21] Server:       https://api.cluster-khd65.dyn.redhatworkshops.io:6443
+[06:27:21] Users:        user1..user3
+[06:27:21] Source:       https://github.com/mostmark/inner-outer-loop-workshop-gitops.git@main
+[06:27:21] Installing the OpenShift GitOps operator (channel gitops-1.21)
+[06:27:46] OpenShift GitOps operator: ready
+[06:28:17] Argo CD instance openshift-gitops: ready
+[06:28:17] Granting cluster-admin to the openshift-gitops application controller
+[06:28:17] Configuring the Application health check on the openshift-gitops Argo CD instance
+[06:28:18] Creating secrets in the gitea namespace
+[06:28:21] Applying the root Application inner-outer-loop-workshop
+[06:28:21] Waiting up to 3600s for all Applications to be Synced and Healthy
+[06:28:23] inner-outer-loop-workshop=<none>/<none> 
+[06:28:45] inner-outer-loop-workshop=OutOfSync/Progressing workshop-lab-guide=Synced/Healthy workshop-operators=Synced/Progressing 
+[06:29:52] inner-outer-loop-workshop=OutOfSync/Progressing workshop-lab-guide=Synced/Healthy workshop-operators=Synced/Degraded 
+[06:30:15] inner-outer-loop-workshop=OutOfSync/Progressing workshop-lab-guide=Synced/Healthy workshop-operators=Synced/Progressing 
+[06:30:59] inner-outer-loop-workshop=OutOfSync/Progressing workshop-lab-guide=Synced/Healthy workshop-operators=Synced/Healthy 
+[06:32:06] inner-outer-loop-workshop=OutOfSync/Healthy workshop-lab-guide=Synced/Healthy workshop-operators=Synced/Healthy workshop-platform=OutOfSync/Healthy 
+[06:32:29] inner-outer-loop-workshop=OutOfSync/Progressing workshop-lab-guide=Synced/Healthy workshop-operators=Synced/Healthy workshop-platform=OutOfSync/Progressing 
+[06:33:59] inner-outer-loop-workshop=OutOfSync/Progressing workshop-lab-guide=Synced/Healthy workshop-operators=Synced/Healthy workshop-platform=OutOfSync/Healthy 
+[06:34:44] inner-outer-loop-workshop=OutOfSync/Progressing workshop-lab-guide=Synced/Healthy workshop-operators=Synced/Healthy workshop-platform=OutOfSync/Progressing 
+[06:35:29] inner-outer-loop-workshop=OutOfSync/Progressing workshop-lab-guide=Synced/Healthy workshop-operators=Synced/Healthy workshop-platform=Synced/Healthy 
+[06:36:15] inner-outer-loop-workshop=OutOfSync/Healthy workshop-lab-guide=Synced/Healthy workshop-operators=Synced/Healthy workshop-platform=Synced/Healthy workshop-users=OutOfSync/Missing 
+[06:36:37] inner-outer-loop-workshop=Synced/Progressing workshop-lab-guide=Synced/Healthy workshop-operators=Synced/Healthy workshop-platform=Synced/Healthy workshop-users=OutOfSync/Healthy 
+[06:37:23] inner-outer-loop-workshop=Synced/Progressing workshop-lab-guide=Synced/Healthy workshop-operators=Synced/Healthy workshop-platform=Synced/Healthy workshop-users=Synced/Healthy 
+[06:37:45] All Applications are Synced and Healthy
+real	10m26.650s
+bootstrap exit=0
+```
+
+State before the cleanup (participant content of user1 deployed by the journey):
+
+```text
+== before cleanup: Applications (openshift-gitops, argocd)
+argocd             catalog-user1               Synced   Healthy
+argocd             gateway-user1               Synced   Healthy
+argocd             inventory-user1             Synced   Healthy
+argocd             web-user1                   Synced   Healthy
+openshift-gitops   inner-outer-loop-workshop   Synced   Healthy
+openshift-gitops   workshop-lab-guide          Synced   Healthy
+openshift-gitops   workshop-operators          Synced   Healthy
+openshift-gitops   workshop-platform           Synced   Healthy
+openshift-gitops   workshop-users              Synced   Healthy
+== user1 Deployments
+catalog-coolstore     1/1   1     1     14m
+catalog-postgresql    1/1   1     1     11m
+gateway-coolstore     1/1   1     1     14m
+inventory-coolstore   1/1   1     1     16m
+inventory-mariadb     1/1   1     1     11m
+web-coolstore         1/1   1     1     13m
+catalog-coolstore      1/1   1     1     4m38s
+catalog-coolstore-v2   1/1   1     1     2m56s
+gateway-coolstore      1/1   1     1     4m41s
+inventory-coolstore    1/1   1     1     6m50s
+istio-ingressgateway   1/1   1     1     2m59s
+web-coolstore          1/1   1     1     3m38s
+```
+
+One-pass cleanup of the complete installation:
+
+```text
+[06:58:45] Logged in as: admin
+[06:58:45] Server:       https://api.cluster-khd65.dyn.redhatworkshops.io:6443
+[06:58:46] Deleting the root Application inner-outer-loop-workshop (Argo CD prunes everything it manages)
+[07:01:12] workshop Applications: gone
+[07:01:16] workshop namespaces: gone
+[07:01:16] Removing TektonConfig (lets the Pipelines operator clean up openshift-pipelines)
+[07:01:54] TektonConfig installer sets: gone
+[07:01:54] Removing operator Subscriptions and ClusterServiceVersions
+[07:02:11] Operator for tektoninstallersets.operator.tekton.dev is gone; removing finalizers of <none>/validating-mutating-webhook-gwgzm
+[07:02:13] Pipelines operator installer sets: gone
+[07:02:13] Removing operator namespaces kept during the Argo CD cleanup
+[07:02:13] Removing objects the operators created themselves
+[07:02:22] Disabled console plugin pipelines-console-plugin
+[07:02:31] Removed openshift/java:openjdk-21-ubi9
+[07:02:31] Removing the operators' CRDs
+[07:02:41] Removing OpenShift GitOps
+[07:03:19] Argo CD instances: gone
+[07:03:35] operator namespaces: gone
+Workshop cleanup complete; verified that no workshop namespaces, operators, CRDs,
+webhooks or cluster additions are left.
+real	4m59.993s
 cleanup exit=0
 ```
 
-The first cleanup left two things: the GitOps operator re-created its default Argo CD instance
-while it was being uninstalled (namespace `openshift-gitops` stuck on a finalizer), and the
-Pipelines operator was removed before it had deleted its TektonInstallerSets. `cleanup.sh` was
-fixed (disable the default instance first, wait for the installer sets, drain orphaned finalizers
-if an operator is already gone, remove the ConsolePlugins, the pipelines SCC, the Tekton operator
-webhooks and operator ClusterRoles) and re-run on the same cluster:
-
-```text
-[05:23:49] Logged in as: admin
-[05:23:49] Server:       https://api.cluster-khd65.dyn.redhatworkshops.io:6443
-[05:23:50] workshop Applications: gone
-[05:23:54] workshop namespaces: gone
-[05:23:54] Removing TektonConfig (lets the Pipelines operator clean up openshift-pipelines)
-[05:23:56] Operator for tektoninstallersets.operator.tekton.dev is gone; removing finalizers of <none>/pipeline-main-static-w9z7p
-[05:23:58] Operator for tektoninstallersets.operator.tekton.dev is gone; removing finalizers of <none>/pipeline-pre-287wk
-[05:23:59] Operator for tektoninstallersets.operator.tekton.dev is gone; removing finalizers of <none>/rhosp-rbac-7kknc
-[05:24:00] Operator for tektoninstallersets.operator.tekton.dev is gone; removing finalizers of <none>/tekton-config-console-plugin-manifests-hhpng
-[05:24:00] Operator for tektoninstallersets.operator.tekton.dev is gone; removing finalizers of <none>/tektoncd-pruner-rq82t
-[05:24:01] Operator for tektoninstallersets.operator.tekton.dev is gone; removing finalizers of <none>/validating-mutating-webhook-ckmxv
-[05:24:03] TektonInstallerSets: gone
-[05:24:03] Removing operator Subscriptions and ClusterServiceVersions
-[05:24:10] Removing operator namespaces kept during the Argo CD cleanup
-[05:24:10] Removing objects the operators created themselves
-[05:24:25] Removing the operators' CRDs
-[05:24:27] Removing OpenShift GitOps
-[05:24:30] Operator for argocds.argoproj.io is gone; removing finalizers of openshift-gitops/openshift-gitops
-[05:24:32] Argo CD instances: gone
-[05:24:43] operator namespaces: gone
-```
-
-State after cleanup (only the platform's own add-ons remain: ODF, cert-manager, Keycloak):
+State after the cleanup (only the platform's own add-ons remain: ODF, cert-manager, Keycloak):
 
 ```text
 == namespaces (non-platform)
@@ -155,40 +200,48 @@ rook-ceph-operator.v4.21.12-rhodf
 Kept by design: the pre-created users (identity provider), `openshift-user-workload-monitoring`
 (owned by the cluster monitoring operator).
 
-Second bootstrap from scratch:
+Bootstrap #4 (from the cleaned cluster, the installation left running):
 
 ```text
-[05:26:05] Logged in as: admin
-[05:26:06] Server:       https://api.cluster-khd65.dyn.redhatworkshops.io:6443
-[05:26:06] Users:        user1..user3
-[05:26:06] Source:       https://github.com/mostmark/inner-outer-loop-workshop-gitops.git@main
-[05:26:06] Installing the OpenShift GitOps operator (channel gitops-1.21)
-[05:26:30] OpenShift GitOps operator: ready
-[05:27:14] Argo CD instance openshift-gitops: ready
-[05:27:14] Granting cluster-admin to the openshift-gitops application controller
-[05:27:14] Configuring the Application health check on the openshift-gitops Argo CD instance
-[05:27:15] Creating secrets in the gitea namespace
-[05:27:17] Applying the root Application inner-outer-loop-workshop
-[05:27:18] Waiting up to 3600s for all Applications to be Synced and Healthy
-[05:27:20] inner-outer-loop-workshop=<none>/<none> 
-[05:27:42] inner-outer-loop-workshop=OutOfSync/Progressing workshop-lab-guide=Synced/Healthy workshop-operators=OutOfSync/Healthy 
-[05:28:04] inner-outer-loop-workshop=OutOfSync/Progressing workshop-lab-guide=Synced/Healthy workshop-operators=Synced/Degraded 
-[05:28:49] inner-outer-loop-workshop=OutOfSync/Progressing workshop-lab-guide=Synced/Healthy workshop-operators=Synced/Progressing 
-[05:29:34] inner-outer-loop-workshop=OutOfSync/Progressing workshop-lab-guide=Synced/Healthy workshop-operators=Synced/Healthy 
-[05:31:25] inner-outer-loop-workshop=OutOfSync/Progressing workshop-lab-guide=Synced/Healthy workshop-operators=Synced/Healthy workshop-platform=OutOfSync/Healthy 
-[05:32:33] inner-outer-loop-workshop=OutOfSync/Progressing workshop-lab-guide=Synced/Healthy workshop-operators=Synced/Healthy workshop-platform=OutOfSync/Progressing 
-[05:34:03] inner-outer-loop-workshop=OutOfSync/Progressing workshop-lab-guide=Synced/Healthy workshop-operators=Synced/Healthy workshop-platform=OutOfSync/Healthy 
-[05:34:25] inner-outer-loop-workshop=OutOfSync/Progressing workshop-lab-guide=Synced/Healthy workshop-operators=Synced/Healthy workshop-platform=Synced/Healthy 
-[05:35:10] inner-outer-loop-workshop=OutOfSync/Healthy workshop-lab-guide=Synced/Healthy workshop-operators=Synced/Healthy workshop-platform=Synced/Healthy workshop-users=<none>/<none> 
-[05:35:33] inner-outer-loop-workshop=Synced/Progressing workshop-lab-guide=Synced/Healthy workshop-operators=Synced/Healthy workshop-platform=Synced/Healthy workshop-users=OutOfSync/Healthy 
-[05:36:17] All Applications are Synced and Healthy
-real	10m14.715s
+[07:03:47] Logged in as: admin
+[07:03:47] Server:       https://api.cluster-khd65.dyn.redhatworkshops.io:6443
+[07:03:47] Users:        user1..user3
+[07:03:47] Source:       https://github.com/mostmark/inner-outer-loop-workshop-gitops.git@main
+[07:03:47] Installing the OpenShift GitOps operator (channel gitops-1.21)
+[07:04:12] OpenShift GitOps operator: ready
+[07:04:46] Argo CD instance openshift-gitops: ready
+[07:04:46] Granting cluster-admin to the openshift-gitops application controller
+[07:04:46] Configuring the Application health check on the openshift-gitops Argo CD instance
+[07:04:47] Creating secrets in the gitea namespace
+[07:04:50] Applying the root Application inner-outer-loop-workshop
+[07:04:50] Waiting up to 3600s for all Applications to be Synced and Healthy
+[07:04:52] inner-outer-loop-workshop=<none>/<none> 
+[07:05:15] inner-outer-loop-workshop=OutOfSync/Progressing workshop-lab-guide=Synced/Healthy workshop-operators=Synced/Progressing 
+[07:06:44] inner-outer-loop-workshop=OutOfSync/Progressing workshop-lab-guide=Synced/Healthy workshop-operators=Synced/Healthy 
+[07:07:07] inner-outer-loop-workshop=OutOfSync/Healthy workshop-lab-guide=Synced/Healthy workshop-operators=Synced/Healthy workshop-platform=<none>/<none> 
+[07:07:29] inner-outer-loop-workshop=OutOfSync/Progressing workshop-lab-guide=Synced/Healthy workshop-operators=Synced/Healthy workshop-platform=OutOfSync/Healthy 
+[07:08:15] inner-outer-loop-workshop=OutOfSync/Progressing workshop-lab-guide=Synced/Healthy workshop-operators=Synced/Healthy workshop-platform=OutOfSync/Progressing 
+[07:09:22] inner-outer-loop-workshop=OutOfSync/Progressing workshop-lab-guide=Synced/Healthy workshop-operators=Synced/Healthy workshop-platform=OutOfSync/Healthy 
+[07:11:15] inner-outer-loop-workshop=OutOfSync/Progressing workshop-lab-guide=Synced/Healthy workshop-operators=Synced/Healthy workshop-platform=OutOfSync/Progressing 
+[07:12:00] inner-outer-loop-workshop=OutOfSync/Progressing workshop-lab-guide=Synced/Healthy workshop-operators=Synced/Healthy workshop-platform=Synced/Healthy 
+[07:12:45] inner-outer-loop-workshop=OutOfSync/Healthy workshop-lab-guide=Synced/Healthy workshop-operators=Synced/Healthy workshop-platform=Synced/Healthy workshop-users=<none>/<none> 
+[07:13:08] inner-outer-loop-workshop=Synced/Progressing workshop-lab-guide=Synced/Healthy workshop-operators=Synced/Healthy workshop-platform=Synced/Healthy workshop-users=OutOfSync/Healthy 
+[07:13:53] All Applications are Synced and Healthy
+real	10m8.388s
 bootstrap exit=0
 ```
 
-## 5. Smoke tests (fresh installation after the second bootstrap)
+Cleanup history: the first cleanup run exposed that the GitOps operator re-creates its default
+Argo CD instance while it is being uninstalled, and that the Pipelines operator must stay until it
+has removed the TektonInstallerSets of TektonConfig (its own webhook installer set lives as long as
+the operator). The script now disables the default instance before removing GitOps, waits for the
+TektonConfig installer sets, deletes and (if the operator is already gone) de-finalizes leftover
+operator objects, removes the ConsolePlugins, the pipelines SCC, Tekton operator webhooks and
+operator ClusterRoles the operators create at run time, and verifies the end state.
 
-### platform-check.sh (Summary: 112 passed, 0 failed)
+## 5. Smoke tests
+
+### platform-check.sh, 3 users, final installation (bootstrap #4) (Summary: 112 passed, 0 failed)
 
 ```text
 
@@ -322,7 +375,7 @@ PASS  No crash-looping pods in devspaces-user3
 platform exit=0
 ```
 
-### isolation-check.sh user1 user2 (Summary: 44 passed, 0 failed)
+### isolation-check.sh user1 user2, final installation (bootstrap #4) (Summary: 44 passed, 0 failed)
 
 ```text
 
@@ -386,7 +439,7 @@ PASS  user1's Kiali view does not include user2's namespaces
 isolation exit=0
 ```
 
-### user-journey.sh user1 (Summary: 76 passed, 0 failed)
+### user-journey.sh user1 on a fresh installation (bootstrap #3) (Summary: 76 passed, 0 failed)
 
 Strict mode (stops at the first failure), both parts, run inside user1's workspace:
 
@@ -396,7 +449,7 @@ Strict mode (stops at the first failure), both parts, run inside user1's workspa
 PASS  oc login as user1 with the workshop password
 PASS  oc whoami is user1
 PASS  Workspace wksp-end-to-end-dev is Running
-PASS  Workspace pod found (workspace9cb7fa7fcbe54c69-745564785b-tgrq4)
+PASS  Workspace pod found (workspace182d37476d3d4c30-fb856c444-mv456)
 PASS  Workspace sources are up to date with main
 
 === Part 1 - Inner Loop ===
@@ -441,8 +494,8 @@ PASS  Configuration: web UI through the gateway
 === Part 2 - Outer Loop ===
 PASS  CI: push inventory to Gitea and create the pipeline
 PASS  CI: repository user1/inventory-quarkus has a main branch
-PASS  CI: PipelineRun started (inventory-pipeline-gzmqw)
-PASS  CI: PipelineRun inventory-pipeline-gzmqw succeeded (git-clone, s2i-java)
+PASS  CI: PipelineRun started (inventory-pipeline-75wm4)
+PASS  CI: PipelineRun inventory-pipeline-75wm4 succeeded (git-clone, s2i-java)
 PASS  CI: image inventory-coolstore in cn-project-user1
 PASS  GitOps: export and push the configuration, create the Argo CD Applications
 PASS  GitOps: repository user1/inventory-gitops has the manifests
@@ -478,10 +531,10 @@ PASS  Mesh: Kiali graph has gateway-coolstore -> catalog-coolstore
 journey exit=0
 ```
 
-The previous runs found and fixed: the export kept Quarkus' `resolve-names` annotation (Argo CD
-drift, fixed in the code repo), the project cleanup deleted PVCs before pipeline runs (deadlock,
-fixed), plus four test-script defects. `user-journey.sh user1 --reset` returns user1 to the initial
-state (11 checks passed).
+The same journey also passed 76/76 on bootstrap #2. Earlier runs found and fixed: the export kept
+Quarkus' `resolve-names` annotation (Argo CD drift, fixed in the code repo), the project cleanup
+deleted PVCs before pipeline runs (deadlock, fixed), plus four test-script defects.
+`user-journey.sh user1 --reset` returns user1 to the initial state (11 checks passed).
 
 ## 6. Helm
 
@@ -511,7 +564,7 @@ workshop-users [--set users.prefix=student] lint: 1 chart(s) linted, 0 chart(s) 
 ## 7. Resource footprint and sizing
 
 Measured with `smoke-tests/footprint.sh` while user1 had both parts deployed and user2 was idle
-(pre-started workspace only):
+(pre-started workspace only); user3 was idle like user2 and is omitted:
 
 ```text
 Scope                          Pods   CPU req    Mem req   CPU lim    Mem lim   CPU use    Mem use
@@ -540,7 +593,8 @@ Sizing for 20-30 participants (details and the 3/10/20/30 table in the README):
 | 30 | 130 GiB / 190 GiB | 60 vCPU | 4 |
 
 This matches the old guidance of about 8 participants per 16 vCPU / 64 GiB worker. Memory is the
-limiting resource; plan about 10 GiB of persistent volumes per participant.
+limiting resource; plan about 13.5 GiB of persistent volume claims per participant (workspace
+10 GiB, pipeline PVCs up to 3.5 GiB).
 
 ## 8. Documentation
 

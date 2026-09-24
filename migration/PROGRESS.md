@@ -19,9 +19,9 @@
 | 2 GitOps repo | done; helm lint/template pass for all variants |
 | 3 Content repo | done; Antora build clean; image public; GitHub Pages preview live |
 | 4 Code repo | done; tooling image public |
-| 5 Provisioning | done: bootstrap, full cleanup (fixed and re-verified), second bootstrap from scratch green in 10 min |
-| 6 Smoke tests | done on the fresh install: platform-check 112/112, isolation-check 44/44, user-journey user1 76/76, reset 11/11 |
-| 7 Docs and handoff | done: FINAL-REPORT written; independent review round 2 pending |
+| 5 Provisioning | done: four bootstraps (about 10 min each); final cleanup.sh removed a full installation with participant content in one pass with verified end state; bootstrap #4 left running |
+| 6 Smoke tests | done: platform-check 112/112 and isolation-check 44/44 on bootstrap #4; user-journey user1 76/76 on bootstraps #2 and #3; reset 11/11 |
+| 7 Docs and handoff | done: FINAL-REPORT regenerated from the final runs; review round 2 gaps fixed; round 3 pending |
 
 ## Environment notes
 
@@ -32,11 +32,11 @@
   content repository.
 - A subagent accidentally created (and ~20 s later deleted) a Pipeline in namespace `default`;
   verified gone.
-- The cluster is left with the workshop installed for 3 users (second bootstrap).
+- The cluster is left with the workshop installed for 3 users (bootstrap #4).
 
 ## Next
 
-1. Independent review round 2 against the Definition of Done; fix any gaps and repeat.
+1. Independent review round 3 against the Definition of Done; fix any gaps and repeat.
 
 ## Blockers
 
