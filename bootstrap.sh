@@ -25,6 +25,7 @@ USERS_EXPLICIT_NAMES="${USERS_EXPLICIT_NAMES:-}"
 REPO_URL="${REPO_URL:-https://github.com/mostmark/inner-outer-loop-workshop-gitops.git}"
 REVISION="${REVISION:-main}"
 GITOPS_CHANNEL="${GITOPS_CHANNEL:-gitops-1.21}"
+GUIDE_PART="${GUIDE_PART:-all}"
 TIMEOUT="${TIMEOUT:-3600}"
 WAIT=true
 
@@ -39,6 +40,9 @@ Options:
   --users N          Number of generated users <prefix>1..<prefix>N (default: ${USERS_COUNT})
   --prefix PREFIX    Prefix for generated user names (default: ${USERS_PREFIX})
   --names a,b,c      Explicit user names; when set, --users and --prefix are ignored
+  --guide-part PART  Lab guide content: all (Part 1 and Part 2), inner (Part 1 only) or
+                     outer (Part 2 only) (default: ${GUIDE_PART}). Switch later with
+                     set-guide-part.sh
   --repo URL         Git repository with this GitOps content (default: ${REPO_URL})
   --revision REV     Git revision to deploy (default: ${REVISION})
   --timeout SECONDS  How long to wait for everything to be Synced and Healthy (default: ${TIMEOUT})
@@ -56,6 +60,7 @@ while [[ $# -gt 0 ]]; do
     --users) USERS_COUNT="$2"; shift 2 ;;
     --prefix) USERS_PREFIX="$2"; shift 2 ;;
     --names) USERS_EXPLICIT_NAMES="$2"; shift 2 ;;
+    --guide-part) GUIDE_PART="$2"; shift 2 ;;
     --repo) REPO_URL="$2"; shift 2 ;;
     --revision) REVISION="$2"; shift 2 ;;
     --timeout) TIMEOUT="$2"; shift 2 ;;
@@ -78,6 +83,7 @@ oc whoami >/dev/null 2>&1 || die "Not logged in to OpenShift. Please run 'oc log
 if [[ -z "$USERS_EXPLICIT_NAMES" ]] && ! [[ "$USERS_COUNT" =~ ^[1-9][0-9]*$ ]]; then
   die "--users must be a positive integer."
 fi
+[[ "$GUIDE_PART" =~ ^(all|inner|outer)$ ]] || die "--guide-part must be all, inner or outer."
 
 log "Logged in as: $(oc whoami)"
 log "Server:       $(oc whoami --show-server)"
@@ -87,6 +93,7 @@ else
   log "Users:        ${USERS_PREFIX}1..${USERS_PREFIX}${USERS_COUNT}"
 fi
 log "Source:       ${REPO_URL}@${REVISION}"
+log "Lab guide:    ${GUIDE_PART} (all = Part 1 and Part 2, inner = Part 1 only, outer = Part 2 only)"
 
 wait_for() {
   # wait_for <description> <timeout-seconds> <command...>
@@ -221,12 +228,13 @@ sed -e "s|repoURL: .*|repoURL: ${REPO_URL}|" \
     -e "s|targetRevision: .*|targetRevision: ${REVISION}|" \
     "${SCRIPT_DIR}/argocd/application.yaml" \
   | awk -v count="$USERS_COUNT" -v prefix="$USERS_PREFIX" -v names="$EXPLICIT_NAMES_PARAM" \
-        -v repo="$REPO_URL" -v rev="$REVISION" '
+        -v repo="$REPO_URL" -v rev="$REVISION" -v part="$GUIDE_PART" '
       /- name: users.count/          { print; getline; sub(/value: .*/, "value: \"" count "\""); print; next }
       /- name: users.prefix/         { print; getline; sub(/value: .*/, "value: " prefix); print; next }
       /- name: users.explicitNames/  { print; getline; sub(/value: .*/, "value: \"" names "\""); print; next }
       /- name: source.repoURL/       { print; getline; sub(/value: .*/, "value: " repo); print; next }
       /- name: source.targetRevision/ { print; getline; sub(/value: .*/, "value: " rev); print; next }
+      /- name: guidePart/            { print; getline; sub(/value: .*/, "value: " part); print; next }
       { print }' \
   | oc apply -f -
 

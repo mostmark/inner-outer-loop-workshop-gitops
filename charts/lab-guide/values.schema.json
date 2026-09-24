@@ -18,6 +18,7 @@
       "properties": {
         "namespace": { "type": "string", "minLength": 1 },
         "image": { "type": "string", "minLength": 1 },
+        "part": { "type": "string", "enum": ["all", "inner", "outer"] },
         "imagePullPolicy": { "type": "string", "enum": ["Always", "IfNotPresent", "Never"] },
         "replicas": { "type": "integer", "minimum": 1 },
         "route": {

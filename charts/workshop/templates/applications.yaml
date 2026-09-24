@@ -22,7 +22,13 @@ spec:
     path: {{ printf "charts/%s" $component.chart | quote }}
     helm:
       valuesObject:
-        {{- include "workshop.componentValues" (list $ (index $.Values (index $valueKeys $key))) | nindent 8 }}
+        {{- $overrides := deepCopy (index $.Values (index $valueKeys $key) | default dict) }}
+        {{- if eq $key "labGuide" }}
+        {{- $labGuide := deepCopy (get $overrides "labGuide" | default dict) }}
+        {{- $_ := set $labGuide "part" $.Values.guidePart }}
+        {{- $_ := set $overrides "labGuide" $labGuide }}
+        {{- end }}
+        {{- include "workshop.componentValues" (list $ $overrides) | nindent 8 }}
   destination:
     server: https://kubernetes.default.svc
     namespace: {{ $component.destinationNamespace | quote }}

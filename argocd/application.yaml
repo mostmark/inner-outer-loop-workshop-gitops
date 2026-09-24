@@ -21,6 +21,8 @@ spec:
           value: user
         - name: users.explicitNames
           value: "null"
+        - name: guidePart
+          value: all
         - name: source.repoURL
           value: https://github.com/mostmark/inner-outer-loop-workshop-gitops.git
         - name: source.targetRevision

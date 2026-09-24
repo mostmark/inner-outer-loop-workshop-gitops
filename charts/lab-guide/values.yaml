@@ -7,6 +7,10 @@ users:
 labGuide:
   namespace: lab-guide
   image: quay.io/mostmark/inner-outer-loop-lab:latest
+  # Which part of the workshop the guide shows: all (Part 1 and Part 2), inner (Part 1 only) or
+  # outer (Part 2 only). The image contains all three; switching only restarts the pod.
+  # Set it with the root chart's `guidePart` value (bootstrap.sh --guide-part, set-guide-part.sh).
+  part: all
   imagePullPolicy: Always
   replicas: 1
   resources:

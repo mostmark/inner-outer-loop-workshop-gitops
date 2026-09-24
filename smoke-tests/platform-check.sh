@@ -104,17 +104,32 @@ if [[ -n "${WORKSHOP_USER_PASSWORD:-}" && -n "$first_user" ]]; then
   check "print-user-urls.sh prints a URL for $first_user" test -n "$url"
   check "Per-user URL renders" bash -c "curl -skf '$url' >/dev/null"
 fi
-# The theme replaces %tokens% with URL parameters in the browser; the served pages must carry the
-# tokens and every page of both parts must be present.
-for page in index inner-loop-01-introduction inner-loop-02-developer-workspace inner-loop-03-inventory-quarkus \
-            inner-loop-04-catalog-spring-boot inner-loop-05-gateway-dotnet inner-loop-06-webui-deployment \
-            inner-loop-07-app-health inner-loop-08-app-config outer-loop-01-introduction outer-loop-02-developer-workspace \
-            outer-loop-03-continuous-integration outer-loop-04-gitops-workflow outer-loop-05-continuous-delivery \
-            outer-loop-06-service-mesh; do
-  check "Page $page served" bash -c "curl -skf https://${GUIDE}/modules/${page}.html | grep -q '%openshift_username%\|<article'"
+# The guide shows the part configured on the root Application (guidePart: all, inner, outer). Pages
+# of that part must be served, pages of the other part must not exist.
+PART=$(oc get application inner-outer-loop-workshop -n openshift-gitops \
+  -o jsonpath='{.spec.source.helm.parameters[?(@.name=="guidePart")].value}' 2>/dev/null)
+PART=${PART:-all}
+check "Lab guide pod serves part '$PART'" test \
+  "$(oc get deployment lab-guide -n lab-guide -o jsonpath='{.spec.template.spec.containers[0].env[?(@.name=="WORKSHOP_PART")].value}')" = "$PART"
+INNER_PAGES="inner-loop-01-introduction inner-loop-02-developer-workspace inner-loop-03-inventory-quarkus
+  inner-loop-04-catalog-spring-boot inner-loop-05-gateway-dotnet inner-loop-06-webui-deployment
+  inner-loop-07-app-health inner-loop-08-app-config"
+OUTER_PAGES="outer-loop-01-introduction outer-loop-02-developer-workspace outer-loop-03-continuous-integration
+  outer-loop-04-gitops-workflow outer-loop-05-continuous-delivery outer-loop-06-service-mesh"
+case "$PART" in
+  inner) SHOWN="index $INNER_PAGES"; HIDDEN="$OUTER_PAGES" ;;
+  outer) SHOWN="index $OUTER_PAGES"; HIDDEN="$INNER_PAGES" ;;
+  *)     SHOWN="index $INNER_PAGES $OUTER_PAGES"; HIDDEN="" ;;
+esac
+# The theme replaces %tokens% with URL parameters in the browser; the served pages must carry them.
+for page in $SHOWN; do
+  check "Page $page served" bash -c "curl -skf https://${GUIDE}/modules/${page}.html | grep -q '<article'"
+done
+for page in $HIDDEN; do
+  check_http "Page $page of the other part is not served" "https://${GUIDE}/modules/${page}.html" 404
 done
 check "Pages carry the per-user tokens" bash -c \
-  "curl -skf https://${GUIDE}/modules/inner-loop-02-developer-workspace.html | grep -q '%openshift_username%'"
+  "curl -skf https://${GUIDE}/modules/index.html | grep -q '%openshift_username%'"
 check "Head script derives the apps domain" bash -c \
   "curl -skf https://${GUIDE}/modules/index.html | grep -q OPENSHIFT_APPS_DOMAIN"
 

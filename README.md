@@ -29,6 +29,7 @@ and the example code in [inner-outer-loop-workshop-code](https://github.com/most
 ├── bootstrap.sh                  # the only imperative step
 ├── cleanup.sh                    # removes the workshop
 ├── print-user-urls.sh            # prints each participant's lab guide URL
+├── set-guide-part.sh             # shows Part 1, Part 2 or both in the lab guide
 ├── smoke-tests/                  # platform-check.sh, user-journey.sh, isolation-check.sh
 └── migration/                    # migration record, decisions, inventory, known issues, report
 ```
@@ -94,8 +95,8 @@ Synced and Healthy and prints the lab guide URL template. A fresh install took a
 on the test cluster (operators about 4, platform about 4, users about 1), plus 2 to 3 minutes until
 the pre-started workspaces are running.
 
-Options: `--users N`, `--prefix PREFIX`, `--names a,b,c`, `--repo URL`, `--revision REV`,
-`--timeout SECONDS`, `--no-wait`. `GITOPS_CHANNEL` overrides the OpenShift GitOps channel
+Options: `--users N`, `--prefix PREFIX`, `--names a,b,c`, `--guide-part all|inner|outer`,
+`--repo URL`, `--revision REV`, `--timeout SECONDS`, `--no-wait`. `GITOPS_CHANNEL` overrides the OpenShift GitOps channel
 (`gitops-1.21`).
 
 What `bootstrap.sh` grants the provisioning instance and why:
@@ -148,6 +149,49 @@ ignored. The root chart passes the `users` block to every child chart.
 
 To add participants during a workshop, run `bootstrap.sh` again with the new count (or change
 the parameter in Argo CD). Removing participants prunes their namespaces.
+
+## Running the Workshop as One Event or on Two Days
+
+The workshop has two parts: Part 1 Inner Loop and Part 2 Outer Loop, each about half a day. The
+lab guide can show both parts or only one of them, so that on a two-day event participants only
+see the part of the day and cannot pick the wrong one or jump ahead.
+
+| `guidePart` | The lab guide shows | Typical use |
+|---|---|---|
+| `all` (default) | Part 1 and Part 2 | one-day event |
+| `inner` | Part 1 Inner Loop only | day 1 of a two-day event |
+| `outer` | Part 2 Outer Loop only | day 2 of a two-day event, or a Part 2-only event |
+
+The setting only changes what the lab guide shows. Provisioning is the same for every value:
+everything both parts need is installed up front, participants keep their workspace, projects
+and Part 1 work between the days, and their lab guide URL does not change.
+
+Two-day event:
+
+```bash
+# Before day 1: install the workshop with only Part 1 visible
+./bootstrap.sh --users 20 --guide-part inner
+./print-user-urls.sh                      # hand out the URLs; they stay valid on day 2
+
+# Before day 2: switch the lab guide to Part 2 (takes about a minute)
+./set-guide-part.sh outer
+```
+
+`set-guide-part.sh` changes the `guidePart` Helm parameter of the root Application; Argo CD then
+restarts the lab guide pod with the other variant. You can also change the parameter in the
+`openshift-gitops` Argo CD UI (Application `inner-outer-loop-workshop` > Details > Parameters) or
+run `bootstrap.sh` again with the same user options and a different `--guide-part`. Note that
+`bootstrap.sh` always sets the part: running it again without `--guide-part` switches back to
+`all`.
+
+The pages of the hidden part are not part of the served site at all (they return 404), and the
+Home page and the Part 2 pages only mention what is visible. Participants who start with Part 2
+without having done Part 1 deploy the Part 1 application with one devfile command in Part 2's
+"Prepare your Developer Workspace" lab.
+
+How it works: the lab guide image contains three builds of the site (see `build-site.sh` in the
+content repository), and the lab guide Deployment's `WORKSHOP_PART` environment variable, set
+from `guidePart`, selects the one httpd serves.
 
 ## Resources Per User
 
@@ -272,6 +316,7 @@ helm lint charts/workshop-users --set 'users.explicitNames={alice,bob}'
 | Kiali graph is empty | User workload monitoring must be running (`oc get pods -n openshift-user-workload-monitoring`), and metrics lag 1 to 2 minutes (30 s scrape interval). |
 | `oc login -u` fails for participants | The identity provider must accept the password for the CLI; check the users' passwords in the IdP match `WORKSHOP_USER_PASSWORD`. |
 | Participant cannot see their Applications in Argo CD | They must use "LOG IN VIA OPENSHIFT" with their workshop user; Applications must be in project `cn-project-<user>`. |
+| The lab guide still shows the old part after `set-guide-part.sh` | Check `oc get deployment lab-guide -n lab-guide -o yaml` for `WORKSHOP_PART`, and whether the root Application is Synced. Browsers may show a cached page; reload it. |
 | `cleanup.sh` waits for namespaces | A finalizer is stuck; `oc get <kind> -n <namespace>` for the objects listed. Operators must still be running while their objects are deleted, which is why the operator namespaces are kept until the end. |
 
 More: `migration/KNOWN-ISSUES.md`.

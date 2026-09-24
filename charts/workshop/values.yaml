@@ -5,6 +5,11 @@ users:
   # When explicitNames is non-empty, it is used instead of count/prefix.
   explicitNames: []
 
+# Which part of the workshop the lab guide shows: all (Part 1 Inner Loop and Part 2 Outer Loop),
+# inner (Part 1 only) or outer (Part 2 only). For a two-day event use inner on day 1 and outer on
+# day 2; participants keep the same URL. Provisioning is the same for every value.
+guidePart: all
+
 # Git source of the component charts. bootstrap.sh overrides repoURL/targetRevision when needed.
 source:
   repoURL: https://github.com/mostmark/inner-outer-loop-workshop-gitops.git

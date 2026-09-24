@@ -30,6 +30,9 @@ spec:
         - name: lab-guide
           image: {{ .Values.labGuide.image | quote }}
           imagePullPolicy: {{ .Values.labGuide.imagePullPolicy | quote }}
+          env:
+            - name: WORKSHOP_PART
+              value: {{ .Values.labGuide.part | quote }}
           ports:
             - containerPort: 8080
           readinessProbe:

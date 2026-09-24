@@ -219,3 +219,18 @@ finally OpenShift GitOps (default instance disabled first, because the operator 
 The script verifies the end state and fails if anything is left. Found and fixed on the test
 cluster over three cleanup runs; the final version cleaned a complete installation with
 participant content in one pass (FINAL-REPORT section 4).
+
+## D19. Showing one part of the lab guide (two-day events)
+
+The workshop is often run as two half days (Part 1 on day 1, Part 2 on day 2), and participants
+should only see the part of the day. The choice is made on the server, not in the browser: an
+Antora extension (`content/lib/workshop-part-extension.js`) builds the site for `WORKSHOP_PART`
+`all`, `inner` or `outer` (it removes the other part's pages and navigation section and sets the
+`workshop-part` attribute that the Home page and the two Part 2 pages linking to Part 1 use), the
+image contains all three builds, and httpd serves the one named by the container's
+`WORKSHOP_PART` variable. The root chart's `guidePart` value sets that variable on the lab guide
+Deployment. Switching between the days is a parameter change (`set-guide-part.sh`) that only
+restarts the lab guide pod; participants keep their URLs and their work. Hiding the other part
+client-side (URL parameter, CSS) was rejected because it is easy to get around. Provisioning is
+not split by part: Part 2 needs the whole platform, and installing everything once keeps day 2
+free of setup time. The GitHub Pages preview shows the whole workshop.
