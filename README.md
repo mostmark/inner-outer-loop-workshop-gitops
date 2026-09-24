@@ -178,8 +178,8 @@ Measured on the test cluster (OpenShift 4.22.14, one node with 32 vCPU / 128 GiB
 | Per participant: builds and pipeline runs (transient) | - | - | about 1-2 GiB and 1-2 vCPU per running build |
 
 Planning figure per participant: about 4 GiB steady and up to 6 GiB with builds running, plus
-about 10 GiB of persistent volumes (workspace 10 GiB per user, pipeline PVCs 3.5 GiB, both
-thin-provisioned). Builds are CPU-heavy (Maven, .NET, npm); concurrent builds of a whole class are
+about 13.5 GiB of persistent volume claims (workspace 10 GiB, pipeline PVCs up to 3.5 GiB; the
+Ceph RBD volumes are thin-provisioned). Builds are CPU-heavy (Maven, .NET, npm); concurrent builds of a whole class are
 the peak.
 
 | Participants | Memory (steady / peak) | CPU peak | Workers (16 vCPU / 64 GiB each) | Persistent storage |
