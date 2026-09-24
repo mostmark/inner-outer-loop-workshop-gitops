@@ -31,5 +31,5 @@ migration are in [MIGRATION.md](MIGRATION.md) and [FINAL-REPORT.md](FINAL-REPORT
 
 | # | Issue | Impact | Workaround / next step |
 |---|---|---|---|
-| K15 | The GitHub token used for the migration lacked the `workflow` scope, so `.github/workflows/gh-pages.yml` was pushed separately. | See FINAL-REPORT for the current state. | Push with a token that has the `workflow` scope. The workflow also needs GitHub Pages set to "GitHub Actions" in the repository settings. |
+| K15 | GitHub Pages had to be enabled on the new content repository (build type "GitHub Actions") before the copied workflow could publish the preview site. | Done for `mostmark/inner-outer-loop-workshop`; forks must do the same. | Settings > Pages > Source: GitHub Actions. |
 | K16 | The reference's `site.yml` lists `./content/supplemental-ui` and `./content/lib` as `supplemental_files` entries without `contents`, so Antora adds nothing for them (the reference's header and CSS overrides are not active there either). They were kept verbatim; only `partials/head-scripts.hbs` is wired explicitly. | The site looks like the reference as deployed. | If the RHDP header should be active, add `contents:` entries for the files in `content/supplemental-ui`. |
