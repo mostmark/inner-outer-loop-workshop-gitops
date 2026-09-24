@@ -34,6 +34,12 @@
   verified gone.
 - The cluster is left with the workshop installed for 3 users (bootstrap #4).
 
+## After the migration
+
+- 2026-09-24: lab guide part selection for two-day events (`guidePart`, `--guide-part`,
+  `set-guide-part.sh`, DECISIONS D19), tested on the cluster (FINAL-REPORT section 5).
+- Next topic to discuss with the owner: unique passwords per user (credentials file proposal).
+
 ## Next
 
 - Nothing open for the migration. Remaining manual work: screenshot recapture (SCREENSHOTS-TODO.md)

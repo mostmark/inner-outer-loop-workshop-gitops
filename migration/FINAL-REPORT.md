@@ -537,6 +537,23 @@ Quarkus' `resolve-names` annotation (Argo CD drift, fixed in the code repo), the
 deleted PVCs before pipeline runs (deadlock, fixed), plus four test-script defects.
 `user-journey.sh user1 --reset` returns user1 to the initial state (11 checks passed).
 
+### Lab guide part selection (added after the migration)
+
+`guidePart` (`all`, `inner`, `outer`; `bootstrap.sh --guide-part`, `set-guide-part.sh`) selects
+which part of the workshop the lab guide shows, for two-day events (README section "Running the
+Workshop as One Event or on Two Days", DECISIONS D19). On the final installation each switch took
+about 14 seconds, all Applications stayed Synced and Healthy, and `platform-check.sh` (which checks
+that the configured part's pages are served and the other part's pages return 404) passed:
+
+| `guidePart` | platform-check.sh |
+|---|---|
+| `inner` | Summary: 113 passed, 0 failed |
+| `outer` | Summary: 113 passed, 0 failed |
+| `all` | Summary: 113 passed, 0 failed |
+
+`bootstrap.sh --users 3 --guide-part inner` (re-run on the installed cluster) set the part as well;
+the served navigation then contained only "Part 1: Inner Loop". The cluster is left on `all`.
+
 ## 6. Helm
 
 ```text
@@ -560,6 +577,8 @@ workshop-users [defaults] lint: 1 chart(s) linted, 0 chart(s) failed template: o
 workshop-users [--set users.count=30] lint: 1 chart(s) linted, 0 chart(s) failed template: ok
 workshop-users [--set users.explicitNames={alice,bob}] lint: 1 chart(s) linted, 0 chart(s) failed template: ok
 workshop-users [--set users.prefix=student] lint: 1 chart(s) linted, 0 chart(s) failed template: ok
+workshop [--set guidePart=inner] lint: 1 chart(s) linted, 0 chart(s) failed template: ok
+workshop [--set guidePart=outer] lint: 1 chart(s) linted, 0 chart(s) failed template: ok
 ```
 
 ## 7. Resource footprint and sizing
