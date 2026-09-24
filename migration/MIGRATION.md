@@ -301,7 +301,7 @@ Target: `inner-outer-loop-workshop/content/modules/ROOT/pages/outer-loop-0*.adoc
 - Gitea sign-in: "login via OpenShift" was wrong; Gitea uses its own account `{OPENSHIFT_USERNAME}` /
   `{OPENSHIFT_PASSWORD}` (created by the users chart, D6). NOTE added.
 - Push: `git init -b main`, remote `{GITEA_INTERNAL_URL}/{OPENSHIFT_USERNAME}/inventory-quarkus.git`,
-  `git push -u origin main`; the URL with the hardcoded password `openshift` is removed (workspace Git credentials,
+  `git push -u origin main`; the URL with the hardcoded default password is removed (workspace Git credentials,
   D10). NOTE added. Output updated to `main`.
 - Tekton sidebar: **PipelineResource** (removed in Pipelines 1.11) replaced by an explanation of Params and
   Workspaces; paragraph on the Red Hat Tasks in `openshift-pipelines` resolved through the cluster resolver;

@@ -26,7 +26,7 @@ with `oc get packagemanifest <package> -o yaml` on OpenShift 4.22.14.
 | Service Mesh 3 | `servicemeshoperator3` / redhat-operators | `stable`, v3.2.1, `openshift-operators`, Manual | `stable-3.4` (v3.4.2), `openshift-operators`, Automatic | ops |
 | Kiali | `kiali-ossm` / redhat-operators | `stable`, v2.22.1, `openshift-operators`, Manual | `stable` (only channel), **Manual + `startingCSV: kiali-operator.v2.27.4`**, own ns `kiali-operator`, approval Job | ops |
 | Gitea | `gitea-operator` | Ansible operator image `quay.io/gpte-devops-automation/gitea-operator:v1.2.3` deployed as a plain Deployment in `gitea`, CRD `giteas.gpte.opentlc.com/v1` | rhpds Gitea operator v2.3.2 via CatalogSource `quay.io/rhpds/gitea-catalog:v2.3.2`, channel `stable`, ns `gitea-operator`, Automatic, CRD `gitea.pfe.rhpds.com/v1` | ops |
-| Nexus | Ansible operator `quay.io/redhat-emea-ssa-team/nexus-operator:v0.10` in `opentlc-shared`, CRD `nexus.gpte.opentlc.com` | **dropped**: plain manifests (no maintained operator, D7) | plat |
+| Nexus | Ansible operator image `nexus-operator:v0.10` of the old organisation in `opentlc-shared`, CRD `nexus.gpte.opentlc.com` | **dropped**: plain manifests (no maintained operator, D7) | plat |
 | Serverless | `serverless-operator` (only if `serverless.enabled`) | not enabled in the sample CR | **dropped** (not used by either guide) | - |
 | Elasticsearch / Jaeger | `elasticsearch-operator`, `jaeger-product` | code commented out in 2.13 | **dropped** (no tracing step in the guides) | - |
 | Istio Workspace (`ike`) | `istio-workspace-operator` | only if `istioWorkspace.enabled`; not enabled | **dropped** | - |
@@ -83,20 +83,20 @@ with `oc get packagemanifest <package> -o yaml` on OpenShift 4.22.14.
 | Argo CD (participants) | route `argocd-server-argocd.<apps>`, `argocd-server.argocd.svc` | unchanged |
 | Kiali | route `kiali-istio-system.<apps>` | unchanged |
 | Dev Spaces | `devspaces.<apps>` | unchanged |
-| Portal | `username-distribution` + Redis in `workshop-infra`, route to assign `userN` and link the guides with query parameters (`APPS_HOSTNAME_SUFFIX`, `USER_ID`, `OPENSHIFT_PASSWORD`, `WORKSHOP_GIT_REPO`, `WORKSHOP_GIT_REF`), admin password `r3dh4t1!` | **dropped** (decision 8): `lab-guide-url-template` ConfigMap + `print-user-urls.sh` |
+| Portal | `username-distribution` + Redis in `workshop-infra`, route to assign `userN` and link the guides with query parameters (`APPS_HOSTNAME_SUFFIX`, `USER_ID`, `OPENSHIFT_PASSWORD`, `WORKSHOP_GIT_REPO`, `WORKSHOP_GIT_REF`), fixed admin password | **dropped** (decision 8): `lab-guide-url-template` ConfigMap + `print-user-urls.sh` |
 | Bookbag | per-user bookbag deployments (only if `guide.bookbag.enabled`; disabled in the sample) | **dropped** |
-| Lab guides | GitHub Pages of `redhat-scholars/{inner,outer}-loop-guide` (Antora, course-ui bundle), placeholders replaced client-side from the portal's query string | one Antora site `quay.io/mostmark/inner-outer-loop-lab:latest` served in `lab-guide` (route `doc`), URL parameters `OPENSHIFT_USERNAME`, `OPENSHIFT_PASSWORD`, `OPENSHIFT_CONSOLE_URL`, `OPENSHIFT_API_URL` |
+| Lab guides | GitHub Pages of the old Inner and Outer Loop guide repositories (MIGRATION.md, section 1) (Antora, course-ui bundle), placeholders replaced client-side from the portal's query string | one Antora site `quay.io/mostmark/inner-outer-loop-lab:latest` served in `lab-guide` (route `doc`), URL parameters `OPENSHIFT_USERNAME`, `OPENSHIFT_PASSWORD`, `OPENSHIFT_CONSOLE_URL`, `OPENSHIFT_API_URL` |
 
-Images used by the old setup: `quay.io/redhat-emea-ssa-team/workshop-tools:6.9` (workspace;
+Images used by the old setup: `workshop-tools:6.9` of the old organisation (workspace;
 rebuilt as `quay.io/mostmark/workshop-tools:latest`, D14),
-`quay.io/redhat-emea-ssa-team/username-distribution:latest` and Redis (portal, dropped),
+`username-distribution:latest` and Redis (portal, dropped),
 `quay.io/gpte-devops-automation/gitea-operator:v1.2.3` (replaced), 
-`quay.io/redhat-emea-ssa-team/nexus-operator:v0.10` (replaced), `registry.redhat.io/devspaces/code-rhel8`,
+`nexus-operator:v0.10` (replaced), `registry.redhat.io/devspaces/code-rhel8`,
 `udi-rhel8` (replaced by the 3.30 editor images), `quay.io/argoproj/argocd:v2.2.2` in the guide's
 Task (now `v3.4.7`), `golang:1.12`/`alpine:3.9` for catalog v2 (now UBI 9 go-toolset).
 
 Authentication: the old operator targeted RHPDS clusters with htpasswd users `user1..userN`
-(`htpasswd/` scripts, password `openshift`). The new setup assumes the users already exist in any
+(`htpasswd/` scripts with a fixed default password). The new setup assumes the users already exist in any
 identity provider (the test cluster uses Keycloak/OpenID) and takes their password from
 `WORKSHOP_USER_PASSWORD`; `htpasswd/` is not carried over.
 
@@ -109,7 +109,7 @@ Summary; the complete per-page lists (line numbers, contexts) are in the appendi
 | Placeholders | `%USER_ID%`, `%APPS_HOSTNAME_SUFFIX%`, `%OPENSHIFT_PASSWORD%`, `%WORKSHOP_GIT_REPO%`, `%WORKSHOP_GIT_REF%`, page-level attributes `OPENSHIFT_CONSOLE_URL` (full topology URL), `CHE_URL`, `KIALI_URL`, `GITEA_URL`, `ARGOCD_URL`, `JAEGER_URL`, `{USER_ID}` in 8 naming patterns | `{OPENSHIFT_USERNAME}`, `{OPENSHIFT_PASSWORD}`, `{OPENSHIFT_CONSOLE_URL}` (host), `{OPENSHIFT_API_URL}`, derived `{OPENSHIFT_APPS_DOMAIN}`; shared attributes in `partials/_attributes.adoc` |
 | Hostnames | `devspaces.<apps>`, `*-my-project<N>.<apps>`, `*-cn-project<N>.<apps>`, `istio-ingressgateway-cn-project<N>.<apps>`, `gitea-server-gitea`, `argocd-server-argocd`, `kiali-istio-system`, console topology links | same routes with `-<user>` names |
 | Service DNS | `gitea-server.gitea.svc:3000`, `nexus.opentlc-shared.svc:8081`, `argocd-server.argocd.svc`, `*-coolstore.my-project<N>.svc:8080`, DBs in my-project | same, Nexus in `nexus` |
-| External URLs | `RedHat-EMEA-SSA-Team/end-to-end-developer-workshop` (devfile, factory links, `oc new-app` sources, `completed` branch), `redhat-scholars` guide sites and course-ui bundle, docs pinned to OCP 4.19, OpenTLC hostnames in sample output | `mostmark/inner-outer-loop-workshop-code` on `main`; Showroom UI bundle; OCP 4.22 docs |
+| External URLs | the old example code repository (devfile, factory links, `oc new-app` sources, `completed` branch), the old guide sites and course-ui bundle, docs pinned to OCP 4.19, OpenTLC hostnames in sample output | `mostmark/inner-outer-loop-workshop-code` on `main`; Showroom UI bundle; OCP 4.22 docs |
 | Assumed resources | pre-created and started workspace, Gitea with accounts, Nexus mirror, Argo CD instance with accounts and AppProject, Pipelines console plugin, `openshift/java` Java 21 tag, database templates, OSSM 3 control plane, Kiali, user workload monitoring, `cn-project` in the mesh | all provisioned by the charts (sections 2 and 3) |
 
 ## 6. Mapping summary

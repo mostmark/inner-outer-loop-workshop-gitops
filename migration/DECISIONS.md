@@ -12,7 +12,7 @@ All branches named in the brief (`workshop-operator` 2.13, `end-to-end-developer
 `inner-loop-guide` 6.9, `outer-loop-guide` 6.11) are the newest version branches of their
 repositories (`git ls-remote --heads` on 2026-09-23); none is newer. Non-version branches
 (`rhds`, `completed`, `demo-mode`, `gh-pages`, dependabot branches) were ignored. The tooling image
-source `RedHat-EMEA-SSA-Team/workshop-tools` (branch 6.9, the version the old devfile used) was
+source `workshop-tools` (MIGRATION.md, section 1; the version the old devfile used) was
 cloned as an additional read-only source because the image had to be rebuilt (D14).
 
 ## D2. App-of-apps split
@@ -51,6 +51,10 @@ Channels verified with `oc get packagemanifest` on OpenShift 4.22.14:
 | Service Mesh 3 | `servicemeshoperator3` | `stable-3.4` | Automatic | `openshift-operators` |
 | Kiali | `kiali-ossm` | `stable` (only channel) | **Manual**, `startingCSV: kiali-operator.v2.27.4` | `kiali-operator` |
 | Gitea | `gitea-operator` | `stable` | Automatic, catalog image pinned to `v2.3.2` | `gitea-operator` |
+
+The DevWorkspace operator is not subscribed by the chart: OLM installs it as a dependency of Dev
+Spaces from its only channel, `fast` (v0.43.0 on the test cluster), in `openshift-operators`.
+Subscribing it explicitly as well would race with OLM's dependency resolution.
 
 Minor-version channels (`gitops-1.21`, `pipelines-1.24`, `stable-3.4`) limit Automatic upgrades to
 patch releases. Kiali only has a `stable` channel and is the operator with a known upgrade hazard
@@ -169,10 +173,10 @@ so the URL template keeps the reference's four parameters.
 
 ## D14. Tooling image rebuilt
 
-`quay.io/redhat-emea-ssa-team/workshop-tools:6.9` still starts on Dev Spaces 3.30, but it ships
+The old `workshop-tools:6.9` image still starts on Dev Spaces 3.30, but it ships
 `oc` 4.15, `argocd` 2.7 (the server is Argo CD 3.4), yq 2.4 and Maven 3.8, lives in the old
 organisation, and has no build pipeline. It is rebuilt from its Dockerfile (source:
-`RedHat-EMEA-SSA-Team/workshop-tools` branch 6.9) on UBI 9 with current tools and published as
+see MIGRATION.md, section 1) on UBI 9 with current tools and published as
 `quay.io/mostmark/workshop-tools:latest`; the Containerfile lives in the code repository.
 
 ## D15. Supplemental UI wiring of the lab guide
