@@ -554,6 +554,35 @@ that the configured part's pages are served and the other part's pages return 40
 `bootstrap.sh --users 3 --guide-part inner` (re-run on the installed cluster) set the part as well;
 the served navigation then contained only "Part 1: Inner Loop". The cluster is left on `all`.
 
+### Per-user passwords (added after the migration)
+
+`WORKSHOP_USER_PASSWORD` (one password for all users) stays the default; `bootstrap.sh
+--credentials-file` supports clusters whose users have different passwords (README section "User
+Passwords", DECISIONS D20). Tested on the test cluster with 3 users:
+
+| Step | Result |
+|---|---|
+| Shared mode: `bootstrap.sh --users 3` re-run on the installed workshop | passed in 0 min 57 s |
+| Shared mode: `platform-check.sh` / `isolation-check.sh user1 user2` (no password in the environment; read from the cluster) | Summary: 116 passed, 0 failed / Summary: 44 passed, 0 failed |
+| user1..user3 given different passwords in Keycloak (with commas, spaces, `&`, `%`, `#`, `+`, a Windows line ending in the file); old password rejected | done |
+| `bootstrap.sh` rejects: users missing from the file (`--users 5`), neither password source, unreadable file; no cluster change | done |
+| Switch the running installation: `bootstrap.sh --users 3 --credentials-file users.csv` (with a stale `WORKSHOP_USER_PASSWORD` still exported) | passed in 0 min 58 s; the Secret holds `password.user1..3` only, the user-setup Job re-ran and updated the Gitea accounts |
+| Workspaces restarted with the README command; `platform-check.sh` | Summary: 116 passed, 0 failed |
+| `isolation-check.sh user1 user2` (passwords from the cluster) / `isolation-check.sh user3 user2 --credentials-file` | Summary: 44 passed, 0 failed / Summary: 44 passed, 0 failed |
+| `print-user-urls.sh`: each URL's `OPENSHIFT_PASSWORD` decodes to the user's own password | done |
+| `user-journey.sh user1` on the switched installation | Summary: 76 passed, 0 failed |
+| `cleanup.sh --yes`, then `bootstrap.sh --users 3 --credentials-file users.csv` from scratch (`WORKSHOP_USER_PASSWORD` unset) | passed in 5 min 33 s; passed in 9 min 6 s |
+| From scratch: `platform-check.sh` / `isolation-check.sh user1 user2` / `user-journey.sh user1` | Summary: 116 passed, 0 failed / Summary: 44 passed, 0 failed / Summary: 76 passed, 0 failed |
+| Switch back: Keycloak passwords of user1..user3 reset to `WORKSHOP_USER_PASSWORD`, `bootstrap.sh --users 3`, workspaces restarted | passed in 0 min 58 s; the Secret holds `userPassword` only |
+| Shared mode again: `user-journey.sh user1 --reset` / `platform-check.sh` / `isolation-check.sh user1 user2` | Summary: 11 passed, 0 failed / Summary: 116 passed, 0 failed / Summary: 44 passed, 0 failed |
+
+Testing found one design issue, fixed before the from-scratch run: the scripts preferred
+`WORKSHOP_USER_PASSWORD` over the cluster Secret, so a shared password still exported in the shell
+would have overridden the per-user passwords. The order is now: credentials file, cluster Secret,
+`WORKSHOP_USER_PASSWORD`. `platform-check.sh` gained one check per user ("workspace has the user's
+current password"), hence 116 checks. The test credentials file was kept outside the repositories
+and deleted afterwards; the test users are back on `WORKSHOP_USER_PASSWORD`.
+
 ## 6. Helm
 
 ```text
@@ -632,8 +661,9 @@ limiting resource; plan about 13.5 GiB of persistent volume claims per participa
 
 - **Screenshots**: recapture the images listed in `SCREENSHOTS-TODO.md` (content repository) on an
   OpenShift 4.22 cluster, keeping the file names; P1 images contradict the new text.
-- **Event password**: use an event-specific `WORKSHOP_USER_PASSWORD` (KNOWN-ISSUES K17) and make
-  sure the users' passwords in the identity provider match it (K12).
+- **Event password**: use an event-specific `WORKSHOP_USER_PASSWORD` (KNOWN-ISSUES K17), or a
+  credentials file when the users have different passwords, and make sure the passwords in the
+  identity provider match (K12).
 - Optional follow-ups from KNOWN-ISSUES: .NET 10 when .NET 9 leaves support, Spring Boot 3 for the
   catalog, Dev Spaces editor image digests after Dev Spaces upgrades.
 

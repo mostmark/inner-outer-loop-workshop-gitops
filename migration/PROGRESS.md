@@ -39,7 +39,10 @@
 - 2026-09-24: lab guide part selection for two-day events (`guidePart`, `--guide-part`,
   `set-guide-part.sh`, DECISIONS D19), tested on the cluster (FINAL-REPORT section 5).
 - 2026-09-24: per-user passwords (`--credentials-file`, `lib/credentials.sh`, DECISIONS D20);
-  shared `WORKSHOP_USER_PASSWORD` stays the default. Cluster tests: see FINAL-REPORT section 5.
+  shared `WORKSHOP_USER_PASSWORD` stays the default. Tested in both modes, switching a running
+  installation both ways and from scratch (cleanup + bootstrap with a credentials file): platform
+  116/116, isolation 44/44, user journey 76/76 (FINAL-REPORT section 5). The test users are back
+  on `WORKSHOP_USER_PASSWORD`; the cluster runs shared mode with 3 users.
 
 ## Next
 
