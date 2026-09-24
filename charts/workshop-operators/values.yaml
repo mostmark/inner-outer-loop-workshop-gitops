@@ -42,7 +42,7 @@ subscriptions:
     source: redhat-operators
     sourceNamespace: openshift-marketplace
     installPlanApproval: Automatic
-  # Kiali only has a `stable` channel. Because OLM once auto-upgraded Kiali to a version that no
+  # Kiali's supported channel is `stable` (`candidate` is a preview). Because OLM once auto-upgraded Kiali to a version that no
   # longer matched the mesh, the operator runs in its own namespace with Manual approval and a
   # pinned startingCSV. A Job approves exactly that CSV and nothing else.
   kiali:

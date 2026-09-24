@@ -49,7 +49,7 @@ Channels verified with `oc get packagemanifest` on OpenShift 4.22.14:
 | Dev Spaces | `devspaces` | `stable` (only channel, 3.30) | Automatic | `openshift-operators` |
 | Pipelines | `openshift-pipelines-operator-rh` | `pipelines-1.24` | Automatic | `openshift-operators` |
 | Service Mesh 3 | `servicemeshoperator3` | `stable-3.4` | Automatic | `openshift-operators` |
-| Kiali | `kiali-ossm` | `stable` (only channel) | **Manual**, `startingCSV: kiali-operator.v2.27.4` | `kiali-operator` |
+| Kiali | `kiali-ossm` | `stable` (the other channel, `candidate`, is a preview) | **Manual**, `startingCSV: kiali-operator.v2.27.4` | `kiali-operator` |
 | Gitea | `gitea-operator` | `stable` | Automatic, catalog image pinned to `v2.3.2` | `gitea-operator` |
 
 The DevWorkspace operator is not subscribed by the chart: OLM installs it as a dependency of Dev
@@ -57,7 +57,7 @@ Spaces from its only channel, `fast` (v0.43.0 on the test cluster), in `openshif
 Subscribing it explicitly as well would race with OLM's dependency resolution.
 
 Minor-version channels (`gitops-1.21`, `pipelines-1.24`, `stable-3.4`) limit Automatic upgrades to
-patch releases. Kiali only has a `stable` channel and is the operator with a known upgrade hazard
+patch releases. Kiali's supported channel is `stable` (plus a `candidate` preview channel), so a channel alone cannot hold a version, and it is the operator with a known upgrade hazard
 (an automatic upgrade once broke the mesh), so it is pinned: Manual approval, a pinned
 `startingCSV`, and a Job that approves exactly that CSV's InstallPlan. It runs in its own
 namespace because OLM install plans are per namespace: a Manual subscription in

@@ -3,7 +3,8 @@
 Migration of the Inner & Outer Loop workshop from the `workshop-operator` to OpenShift GitOps,
 verified on the test cluster `https://api.cluster-khd65.dyn.redhatworkshops.io:6443`
 (OpenShift 4.22.14, one node with 32 vCPU / 128 GiB, x86_64) with 3 users (`user1`..`user3`).
-All output below is verbatim from the scripts in this repository.
+Smoke-test output below is complete and verbatim; bootstrap and cleanup output is an excerpt
+(their progress log lines and final status), omitting the `oc apply`/`oc delete` lines.
 
 ## Definition of Done
 
@@ -33,7 +34,7 @@ $ grep -rE "[%][A-Z_]+%" inner-outer-loop-workshop inner-outer-loop-workshop-cod
 matches: 0
 $ grep -rniE "[R]edHat-EMEA-SSA-Team|[r]edhat-scholars" <all three repos> | grep -v migration/MIGRATION.md
 matches: 0
-$ grep -rniE "[o]pentlc|[u]sername-distribution|[w]orkshop-infra" <content, code, gitops charts/scripts/argocd> (excluding .claude/ tooling docs copied from the reference)
+$ grep -rniE "[o]pentlc|[u]sername-distribution|[w]orkshop-infra" <content, code, gitops charts/scripts/argocd/smoke-tests>
 matches: 0
 $ grep -rnE "([t]argetRevision|[r]evision): *[0-9]|github[.]com/[^ ]*/(blob|tree)/[0-9]|/[6][.][0-9]+/|#[6][.][0-9]" <all three repos, excluding migration/>
 matches: 0

@@ -24,7 +24,7 @@ with `oc get packagemanifest <package> -o yaml` on OpenShift 4.22.14.
 | DevWorkspace operator | `devworkspace-operator` | dependency, resolved by OLM | dependency, `fast` v0.43.0, resolved by OLM | (OLM) |
 | OpenShift Pipelines | `openshift-pipelines-operator-rh` / redhat-operators | `pipelines-1.20`, v1.20.3, `openshift-operators`, Manual | `pipelines-1.24` (v1.24.0), `openshift-operators`, Automatic | ops |
 | Service Mesh 3 | `servicemeshoperator3` / redhat-operators | `stable`, v3.2.1, `openshift-operators`, Manual | `stable-3.4` (v3.4.2), `openshift-operators`, Automatic | ops |
-| Kiali | `kiali-ossm` / redhat-operators | `stable`, v2.22.1, `openshift-operators`, Manual | `stable` (only channel), **Manual + `startingCSV: kiali-operator.v2.27.4`**, own ns `kiali-operator`, approval Job | ops |
+| Kiali | `kiali-ossm` / redhat-operators | `stable`, v2.22.1, `openshift-operators`, Manual | `stable` (`candidate` is a preview), **Manual + `startingCSV: kiali-operator.v2.27.4`**, own ns `kiali-operator`, approval Job | ops |
 | Gitea | `gitea-operator` | Ansible operator image `quay.io/gpte-devops-automation/gitea-operator:v1.2.3` deployed as a plain Deployment in `gitea`, CRD `giteas.gpte.opentlc.com/v1` | rhpds Gitea operator v2.3.2 via CatalogSource `quay.io/rhpds/gitea-catalog:v2.3.2`, channel `stable`, ns `gitea-operator`, Automatic, CRD `gitea.pfe.rhpds.com/v1` | ops |
 | Nexus | Ansible operator image `nexus-operator:v0.10` of the old organisation in `opentlc-shared`, CRD `nexus.gpte.opentlc.com` | **dropped**: plain manifests (no maintained operator, D7) | plat |
 | Serverless | `serverless-operator` (only if `serverless.enabled`) | not enabled in the sample CR | **dropped** (not used by either guide) | - |
