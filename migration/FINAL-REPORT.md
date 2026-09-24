@@ -625,5 +625,8 @@ limiting resource; plan about 13.5 GiB of persistent volume claims per participa
 - The quay.io repositories were created private by the first push; the owner made them public.
 - The GitHub token initially lacked the `workflow` scope (fixed by the owner); GitHub Pages was
   then enabled for the content repository.
+- The test password is the old workshop's public default and therefore appears in Git history
+  (upstream import commit, two early documentation commits). The owner accepted this as
+  documented (KNOWN-ISSUES K17) instead of rewriting history; real events use their own password.
 - During the migration a subagent created, by mistake, a Pipeline in namespace `default` and
   deleted it about 20 seconds later; nothing else was affected.

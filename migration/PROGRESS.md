@@ -21,7 +21,7 @@
 | 4 Code repo | done; tooling image public |
 | 5 Provisioning | done: four bootstraps (about 10 min each); final cleanup.sh removed a full installation with participant content in one pass with verified end state; bootstrap #4 left running |
 | 6 Smoke tests | done: platform-check 112/112 and isolation-check 44/44 on bootstrap #4; user-journey user1 76/76 on bootstraps #2 and #3; reset 11/11 |
-| 7 Docs and handoff | done: FINAL-REPORT regenerated from the final runs; review round 2 gaps fixed; round 3 pending |
+| 7 Docs and handoff | done: FINAL-REPORT final; independent review round 3 passed all DoD items, its documentation notes fixed |
 
 ## Environment notes
 
@@ -36,7 +36,8 @@
 
 ## Next
 
-1. Independent review round 3 against the Definition of Done; fix any gaps and repeat.
+- Nothing open for the migration. Remaining manual work: screenshot recapture (SCREENSHOTS-TODO.md)
+  and an event-specific password (KNOWN-ISSUES K12, K17).
 
 ## Blockers
 
