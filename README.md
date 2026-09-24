@@ -262,7 +262,7 @@ from `guidePart`, selects the one httpd serves.
 |---|---|---|
 | `my-project-<user>` | Part 1 development project | `admin` |
 | `cn-project-<user>` | Part 2 staging project; labels `istio-discovery=enabled`, `argocd.argoproj.io/managed-by=argocd`; PodMonitor for Envoy metrics; Secret `argocd-env-secret` (Argo CD API token) | `edit` |
-| `devspaces-<user>` | DevWorkspace `wksp-end-to-end-dev` (started by default), VS Code editor template, ConfigMap `workshop-env`, Secrets `workshop-credentials` and `workshop-git-credentials` | `admin` |
+| `devspaces-<user>` | DevWorkspace `wksp-end-to-end-dev` (started by default), VS Code editor template, ConfigMaps `workshop-env` and `workshop-devspaces-env` (Dev Spaces URLs, written by the user-setup Job), Secrets `workshop-credentials` and `workshop-git-credentials` | `admin` |
 
 Also per user: Argo CD AppProject `cn-project-<user>` (namespace `argocd`) and RBAC role, an
 Argo CD local account with the `apiKey` capability only, and a Gitea account with the workshop
@@ -380,6 +380,7 @@ helm lint charts/workshop-users --set 'users.explicitNames={alice,bob}'
 | After the cluster was hibernated or restarted, new Istio `Gateway`s (the per-user ingress gateways of the Service Mesh module) do not route traffic | The gateway pods keep stale configuration from before the hibernation. Restart istiod first, then the gateways: `oc rollout restart deployment/istiod -n istio-system`, then `oc rollout restart deployment/istio-ingressgateway -n cn-project-<user>` for each affected participant (all at once: `for ns in $(oc get ns -o name -l istio-discovery=enabled \| grep cn-project- \| cut -d/ -f2); do oc rollout restart deployment/istio-ingressgateway -n $ns; done`). |
 | A child Application stays `Progressing` | Open it in the `openshift-gitops` Argo CD UI. The readiness Jobs in `workshop-setup` (`wait-for-operators`, `wait-for-platform`) and `user-setup` log what they wait for: `oc logs job/<name> -n workshop-setup`. |
 | Kiali operator does not install | Its InstallPlan needs approval; the `approve-kiali-ossm` Job in `workshop-setup` does that for the pinned CSV only. Check its log. |
+| Terminal > New Terminal in the workspace opens an empty terminal (only a cursor, no prompt) | The workspace lacks `CHE_DASHBOARD_URL` (KNOWN-ISSUES K18). Check `oc get configmap workshop-devspaces-env -n devspaces-<user>` and the user-setup Job log, then restart the workspace. `platform-check.sh` checks both. |
 | A workspace is `Failed` | `oc get dw -n devspaces-<user>`. Stop and start it from the Dev Spaces dashboard, or `oc patch dw wksp-end-to-end-dev -n devspaces-<user> --type merge -p '{"spec":{"started":true}}'` after fixing the cause. |
 | Kiali graph is empty | User workload monitoring must be running (`oc get pods -n openshift-user-workload-monitoring`), and metrics lag 1 to 2 minutes (30 s scrape interval). |
 | `oc login -u` fails for participants | The identity provider must accept the password for the CLI; check the users' passwords in the IdP match `WORKSHOP_USER_PASSWORD` or the credentials file (see [User Passwords](#user-passwords)). |

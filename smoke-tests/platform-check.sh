@@ -93,8 +93,13 @@ for user in $USERS; do
   check "$user: Gitea account" in_cluster_http "http://gitea-server.gitea.svc:3000/api/v1/users/$user" 200
   started=$(oc get dw wksp-end-to-end-dev -n "devspaces-$user" -o jsonpath='{.spec.started}' 2>/dev/null)
   phase=$(oc get dw wksp-end-to-end-dev -n "devspaces-$user" -o jsonpath='{.status.phase}' 2>/dev/null)
+  check "$user: Dev Spaces URLs for the workspace (ConfigMap workshop-devspaces-env)" bash -c \
+    "oc get configmap workshop-devspaces-env -n devspaces-$user -o jsonpath='{.data.CHE_DASHBOARD_URL}' | grep -q '^https://.*/dashboard/\$'"
   if [[ "$started" == "true" ]]; then
     check "$user: workspace wksp-end-to-end-dev Running" test "$phase" = "Running"
+    # Without CHE_DASHBOARD_URL the editor cannot open terminals (KNOWN-ISSUES K18).
+    check "$user: workspace container has CHE_DASHBOARD_URL" bash -c \
+      "oc exec -n devspaces-$user \$(oc get pods -n devspaces-$user -l controller.devfile.io/devworkspace_name=wksp-end-to-end-dev -o name | head -1) -c workshop-tools -- printenv CHE_DASHBOARD_URL | grep -q /dashboard/"
   else
     check "$user: workspace wksp-end-to-end-dev exists (not started: $phase)" test -n "$phase"
   fi

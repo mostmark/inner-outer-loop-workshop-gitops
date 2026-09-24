@@ -67,10 +67,39 @@ subjects:
   - kind: ServiceAccount
     name: user-setup
     namespace: {{ .Values.setupNamespace | quote }}
+---
+# Read the Dev Spaces URLs from the CheCluster status (for the workspace environment below).
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: workshop-user-setup
+  namespace: {{ .Values.devspaces.namespace | quote }}
+  labels:
+    {{- include "workshop.labels" . | nindent 4 }}
+rules:
+  - apiGroups: ["org.eclipse.che"]
+    resources: ["checlusters"]
+    verbs: ["get", "list"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: workshop-user-setup
+  namespace: {{ .Values.devspaces.namespace | quote }}
+  labels:
+    {{- include "workshop.labels" . | nindent 4 }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: workshop-user-setup
+subjects:
+  - kind: ServiceAccount
+    name: user-setup
+    namespace: {{ .Values.setupNamespace | quote }}
 {{- range $user := $users }}
 {{- range $ns := list (printf "devspaces-%s" $user) (printf "cn-project-%s" $user) }}
 ---
-# Write the per-user credential secrets.
+# Write the per-user credential secrets and the workspace environment ConfigMap.
 apiVersion: rbac.authorization.k8s.io/v1
 kind: Role
 metadata:
@@ -80,7 +109,7 @@ metadata:
     {{- include "workshop.labels" $ | nindent 4 }}
 rules:
   - apiGroups: [""]
-    resources: ["secrets"]
+    resources: ["secrets", "configmaps"]
     verbs: ["get", "create", "patch", "update"]
 ---
 apiVersion: rbac.authorization.k8s.io/v1
@@ -120,7 +149,13 @@ data:
 #     workspace credentials,
 #   - Secret workshop-credentials in devspaces-<user>, mounted into the workspace as env vars,
 #   - Secret workshop-git-credentials in devspaces-<user>, used by git in the workspace to push
-#     to Gitea.
+#     to Gitea,
+#   - ConfigMap workshop-devspaces-env in devspaces-<user>: the Dev Spaces URLs that the dashboard
+#     adds to every workspace it creates (CHE_DASHBOARD_URL, CHE_PLUGIN_REGISTRY_URL,
+#     CHE_PLUGIN_REGISTRY_INTERNAL_URL). The pre-created workspace is not created by the
+#     dashboard, and without CHE_DASHBOARD_URL the editor cannot open terminals (its Che API
+#     extension passes DASHBOARD_URL=undefined to every terminal, which makes VS Code fail).
+#     The Job reads the URLs from the CheCluster status, so the charts need no cluster domain.
 # The Job is idempotent: existing valid tokens are kept.
 apiVersion: batch/v1
 kind: Job
@@ -148,6 +183,8 @@ spec:
               value: {{ join " " $users | quote }}
             - name: GITEA_URL
               value: {{ .Values.gitea.url | quote }}
+            - name: DEVSPACES_NAMESPACE
+              value: {{ .Values.devspaces.namespace | quote }}
             - name: GITEA_NAMESPACE
               value: {{ .Values.gitea.namespace | quote }}
             - name: ARGOCD_NAMESPACE
@@ -174,6 +211,19 @@ spec:
                 "stringData": dict(p.split("=", 1) for p in pairs)}))
               PY
               }
+              # apply_configmap <namespace> <name> <labels-json> <annotations-json> KEY=VALUE...
+              apply_configmap() {
+                python3 - "$@" <<'PY' | oc apply -f - >/dev/null
+              import json, sys
+              ns, name, labels, annotations, *pairs = sys.argv[1:]
+              labels = json.loads(labels)
+              labels["app.kubernetes.io/part-of"] = "inner-outer-loop-workshop"
+              print(json.dumps({"apiVersion": "v1", "kind": "ConfigMap",
+                "metadata": {"name": name, "namespace": ns, "labels": labels,
+                             "annotations": json.loads(annotations)},
+                "data": dict(p.split("=", 1) for p in pairs)}))
+              PY
+              }
               urlencode() { python3 -c 'import sys,urllib.parse; print(urllib.parse.quote(sys.argv[1], safe=""))' "$1"; }
 
               # Passwords: key password.<user> (one password per user) or userPassword (shared).
@@ -192,6 +242,22 @@ spec:
               echo "Waiting for Gitea and Argo CD"
               until curl -fsS -o /dev/null "$GITEA_URL/api/v1/version"; do sleep 10; done
               until curl -fsS -o /dev/null "http://$ARGOCD_SERVER/healthz"; do sleep 10; done
+
+              # Dev Spaces URLs, as the dashboard sets them for the workspaces it creates.
+              echo "Waiting for the Dev Spaces URL in the CheCluster status"
+              CHE_URL=""
+              for i in $(seq 1 60); do
+                CHE_URL=$(oc get checlusters.org.eclipse.che -n "$DEVSPACES_NAMESPACE" -o jsonpath='{.items[0].status.cheURL}' 2>/dev/null || true)
+                [ -n "$CHE_URL" ] && break
+                sleep 10
+              done
+              [ -n "$CHE_URL" ] || { echo "No cheURL in the CheCluster status of $DEVSPACES_NAMESPACE" >&2; exit 1; }
+              PLUGIN_REGISTRY_URL=$(oc get checlusters.org.eclipse.che -n "$DEVSPACES_NAMESPACE" -o jsonpath='{.items[0].status.pluginRegistryURL}')
+              DEVSPACES_ENV="CHE_DASHBOARD_URL=${CHE_URL%/}/dashboard/"
+              if [ -n "$PLUGIN_REGISTRY_URL" ]; then
+                DEVSPACES_ENV="$DEVSPACES_ENV CHE_PLUGIN_REGISTRY_URL=$PLUGIN_REGISTRY_URL CHE_PLUGIN_REGISTRY_INTERNAL_URL=http://plugin-registry.${DEVSPACES_NAMESPACE}.svc:8080/v3"
+              fi
+              echo "Workspace environment: $DEVSPACES_ENV"
 
               ARGOCD_ADMIN_TOKEN=$(curl -fsS -X POST -H 'Content-Type: application/json' \
                 -d "$(python3 -c 'import json,sys; print(json.dumps({"username":"admin","password":sys.argv[1]}))' "$ARGOCD_ADMIN_PASSWORD")" \
@@ -232,7 +298,13 @@ spec:
                   '{"controller.devfile.io/git-credential":"true","controller.devfile.io/watch-secret":"true"}' \
                   '{"controller.devfile.io/mount-path":"/etc/secret"}' \
                   credentials="${GITEA_URL%%://*}://$user:$(urlencode "$USER_PASSWORD")@${GITEA_URL#*://}"
-                echo "  secrets written"
+                # Dev Spaces URLs: mounted as env vars into every workspace container.
+                # shellcheck disable=SC2086 # DEVSPACES_ENV holds KEY=VALUE words without spaces
+                apply_configmap "devspaces-$user" workshop-devspaces-env \
+                  '{"controller.devfile.io/mount-to-devworkspace":"true","controller.devfile.io/watch-configmap":"true"}' \
+                  '{"controller.devfile.io/mount-as":"env"}' \
+                  $DEVSPACES_ENV
+                echo "  secrets and workspace environment written"
               done
               echo "All users are set up"
           resources:

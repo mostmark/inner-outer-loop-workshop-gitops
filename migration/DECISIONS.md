@@ -253,3 +253,15 @@ hooks alone would not notice a changed Secret). `print-user-urls.sh` and the smo
 keep the passwords at hand after bootstrapping. Their order is an explicit credentials file, the
 cluster Secret, then `WORKSHOP_USER_PASSWORD`: testing showed that a shared password still
 exported in the instructor's shell would otherwise override per-user passwords.
+
+## D21. Dev Spaces URLs in the pre-created workspaces
+
+The Dev Spaces dashboard adds `CHE_DASHBOARD_URL`, `CHE_PLUGIN_REGISTRY_URL` and
+`CHE_PLUGIN_REGISTRY_INTERNAL_URL` to the workspaces it creates; the editor needs at least the
+first one to open terminals (KNOWN-ISSUES K18). The workshop pre-creates its workspaces with
+Argo CD, so it provides them itself: the user-setup Job reads `status.cheURL` and
+`status.pluginRegistryURL` from the CheCluster and writes a per-user ConfigMap
+`workshop-devspaces-env`, mounted as environment variables into every workspace container (the
+same mechanism as `workshop-env`). The values are read at run time rather than set in the chart,
+because the charts do not know the cluster's apps domain and the Dev Spaces host name may be
+customized. Adding the variables to the editor template was rejected for the same reason.
