@@ -121,7 +121,14 @@ wait_gone "workshop namespaces" workshop_namespaces
 log "Removing TektonConfig (lets the Pipelines operator clean up openshift-pipelines)"
 oc delete tektonconfig config --ignore-not-found --wait=true --timeout=300s
 # The operator removes its TektonInstallerSets asynchronously; its CSV must stay until they are gone.
-drain "TektonInstallerSets" tektoninstallersets.operator.tekton.dev openshift-pipelines-operator-rh
+# The Pipelines operator removes the TektonInstallerSets of TektonConfig asynchronously, so its CSV
+# must stay until they are gone. Its own webhook installer set (created-by=operator-webhook-init)
+# lives as long as the operator and is drained after the operator is removed.
+config_installersets() {
+  oc get tektoninstallersets.operator.tekton.dev --no-headers -o name \
+    -l 'operator.tekton.dev/created-by!=operator-webhook-init' 2>/dev/null
+}
+wait_gone "TektonConfig installer sets" config_installersets
 
 delete_operator() {
   # delete_operator <namespace> <package> : Subscriptions and CSVs of one OLM package
@@ -141,6 +148,7 @@ delete_operator openshift-operators openshift-pipelines-operator-rh openshift-pi
 delete_operator openshift-operators servicemeshoperator3 servicemeshoperator3
 delete_operator kiali-operator kiali-ossm kiali-operator
 delete_operator gitea-operator gitea-operator gitea-operator
+drain "Pipelines operator installer sets" tektoninstallersets.operator.tekton.dev openshift-pipelines-operator-rh
 
 log "Removing operator namespaces kept during the Argo CD cleanup"
 oc delete namespace kiali-operator gitea-operator --ignore-not-found --wait=false
