@@ -174,3 +174,32 @@ so the URL template keeps the reference's four parameters.
 organisation, and has no build pipeline. It is rebuilt from its Dockerfile (source:
 `RedHat-EMEA-SSA-Team/workshop-tools` branch 6.9) on UBI 9 with current tools and published as
 `quay.io/mostmark/workshop-tools:latest`; the Containerfile lives in the code repository.
+
+## D15. Supplemental UI wiring of the lab guide
+
+The reference's `site.yml` lists `./content/supplemental-ui` and `./content/lib` as
+`supplemental_files` list entries without `contents`. Antora only adds a list entry's
+`contents`, so these entries add nothing (the reference's `head-meta.hbs`, `header-content.hbs`
+and CSS overrides are not active in its own build either; verified by building both). To keep the
+look of the reference as deployed, those entries were copied verbatim and only the workshop's
+`partials/head-scripts.hbs` (apps domain derivation) is wired with an explicit `contents` entry.
+
+## D16. JKube and DeploymentConfig
+
+JKube 1.11 and even 1.20 still default to a DeploymentConfig on OpenShift. Instead of the old
+enricher configuration (`jkube-openshift-deploymentconfig` with `switchToDeployment`), the catalog
+pom sets the documented global property `jkube.build.switchToDeployment=true`; the generated
+resources are a Service, a Deployment and a Route (verified with `mvn oc:resource`). The guide's
+pom snippet no longer mentions DeploymentConfig. Spring Boot 2.1 stays (it builds and runs on
+Java 21; an upgrade would change the exercise code).
+
+## D17. Smoke tests run the participant's steps in the participant's workspace
+
+`user-journey.sh` logs in as the participant with the workshop password (a separate kubeconfig),
+starts the pre-created workspace if needed, and runs the devfile commands (read from the
+workspace's own `devfile.yaml`) and the guide's solution scripts with `oc exec` in the
+`workshop-tools` container, as a participant would in a workspace terminal. Console and UI steps
+the guide does by hand (Pipeline Builder, Argo CD UI) are replaced by their CLI/API equivalents
+from the solution scripts. The Argo CD OpenShift login is verified separately by
+`isolation-check.sh`, which scripts the browser flow (Argo CD → Dex → OpenShift OAuth → identity
+provider → consent) and checks the resulting session's RBAC in both Argo CD instances.
