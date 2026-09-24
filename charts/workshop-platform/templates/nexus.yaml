@@ -1,7 +1,7 @@
 {{- if .Values.nexus.enabled }}
 {{- $n := .Values.nexus }}
 ---
-# In-cluster Maven mirror, replacing the old nexus.opentlc-shared.svc shared service. Workspaces
+# In-cluster Maven mirror, replacing the external shared Maven mirror of the old setup. Workspaces
 # and S2I builds use http://nexus.nexus.svc:8081/repository/maven-all-public/.
 apiVersion: v1
 kind: Namespace
