@@ -236,7 +236,7 @@ kiali_graph() {
   local token
   token=$(oc whoami -t)
   curl -sk --max-time 30 -H "Authorization: Bearer ${token}" \
-    "https://kiali-istio-system.${DOMAIN}/kiali/api/namespaces/graph?namespaces=${STAGING}&graphType=workload&duration=600s" \
+    "https://kiali-istio-system.${DOMAIN}/api/namespaces/graph?namespaces=${STAGING}&graphType=workload&duration=600s" \
     | tee "${WORK}/graph.json" | grep -q '"edges":\[{'
 }
 step "Mesh: Kiali shows traffic in ${STAGING} (graph has edges)" wait_for 300 kiali_graph

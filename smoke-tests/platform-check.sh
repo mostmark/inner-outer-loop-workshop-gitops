@@ -60,11 +60,11 @@ check "Database templates in openshift" bash -c "oc get template coolstore-maria
 section "Routes"
 DOMAIN=$(apps_domain)
 check_http "Lab guide"            "https://$(oc get route doc -n lab-guide -o jsonpath='{.spec.host}')/"                 200
-check_http "Dev Spaces dashboard" "https://devspaces.${DOMAIN}/dashboard/"                                              "200 302"
+check_http "Dev Spaces dashboard" "https://devspaces.${DOMAIN}/"                                                        200
 check_http "Gitea"                "https://gitea-server-gitea.${DOMAIN}/api/v1/version"                                 200
 check_http "Argo CD (participants)" "https://argocd-server-argocd.${DOMAIN}/healthz"                                   200
 check_http "Argo CD login page"   "https://argocd-server-argocd.${DOMAIN}/auth/login"                                   "200 302 303"
-check_http "Kiali"                "https://kiali-istio-system.${DOMAIN}/kiali/"                                         "200 302"
+check_http "Kiali"                "https://kiali-istio-system.${DOMAIN}/"                                               200
 check "Nexus Maven group readable anonymously" in_cluster_http \
   "http://nexus.nexus.svc:8081/repository/maven-all-public/org/apache/maven/plugins/maven-clean-plugin/maven-metadata.xml" 200
 
