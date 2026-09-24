@@ -165,11 +165,32 @@ to `false` in `charts/workshop/values.yaml`.
 
 ## Sizing
 
-Measured on the test cluster (OpenShift 4.22.14, single node) with the Coolstore application of
-Part 1 and Part 2 running for one participant; see `migration/FINAL-REPORT.md` for the raw
-numbers.
+Measured on the test cluster (OpenShift 4.22.14, one node with 32 vCPU / 128 GiB) with
+`smoke-tests/footprint.sh`; raw numbers in `migration/FINAL-REPORT.md`.
 
-<!-- SIZING-TABLE -->
+| Scope | Requested (CPU / memory) | Used, idle | Used, Part 1 and Part 2 deployed |
+|---|---|---|---|
+| Shared platform (Dev Spaces, mesh, Kiali, Argo CD, Gitea, Nexus, Pipelines, lab guide, user workload monitoring) | 4.6 vCPU / 10.5 GiB | 0.3 vCPU / 7.3 GiB | same |
+| Operators (`openshift-operators`, GitOps) | 0.6 vCPU / 0.4 GiB | 0.7 GiB | same |
+| Per participant: pre-started workspace | 0.28 vCPU / 1.3 GiB (limit 2.5 vCPU / 5.3 GiB) | 0.3 GiB | 0.3 GiB idle, about 2 GiB and 1-2 vCPU while Maven builds run |
+| Per participant: `my-project` + `cn-project` apps and databases | 1 GiB (database limits) | 0 | 3.3 GiB |
+| Per participant: builds and pipeline runs (transient) | - | - | about 1-2 GiB and 1-2 vCPU per running build |
+
+Planning figure per participant: about 4 GiB steady and up to 6 GiB with builds running, plus
+about 10 GiB of persistent volumes (workspace 10 GiB per user, pipeline PVCs 3.5 GiB, both
+thin-provisioned). Builds are CPU-heavy (Maven, .NET, npm); concurrent builds of a whole class are
+the peak.
+
+| Participants | Memory (steady / peak) | CPU peak | Workers (16 vCPU / 64 GiB each) | Persistent storage |
+|---|---|---|---|---|
+| 3 | 20 GiB / 26 GiB | 8 vCPU | 1 (or the test cluster's single 32 vCPU / 128 GiB node) | about 60 GiB |
+| 10 | 50 GiB / 70 GiB | 20 vCPU | 2 | about 160 GiB |
+| 20 | 90 GiB / 130 GiB | 40 vCPU | 3 | about 300 GiB |
+| 30 | 130 GiB / 190 GiB | 60 vCPU | 4 | about 440 GiB |
+
+Figures include the shared platform, not the OpenShift control plane or other cluster add-ons.
+They assume the default pre-started workspaces (`prestartWorkspaces: true`); without pre-start,
+idle participants cost nothing until they open their workspace.
 
 The old guidance of about 8 participants per worker with 16 vCPU / 64 GiB still holds as a
 conservative figure; the numbers above show why memory is the limiting resource.
