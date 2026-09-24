@@ -108,6 +108,7 @@ rollout() { oc rollout status "deployment/$2" -n "$1" --timeout=600s; }
 # ---------------------------------------------------------------------------------------------
 reset_user() {
   section "Reset ${USERNAME} to the initial state"
+  step "Workspace sources are up to date with main" ws "git fetch -q origin main && git reset -q --hard origin/main"
   step "Devfile 'OpenShift - Cleanup'" devfile openshift---cleanup
   step "Delete the user's Gitea repositories" ws '. .tasks/workshop-env.sh &&
     for r in inventory-quarkus inventory-gitops catalog-gitops gateway-gitops web-gitops catalog-spring-boot; do
