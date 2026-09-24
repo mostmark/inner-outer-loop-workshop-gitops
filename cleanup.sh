@@ -69,6 +69,26 @@ wait_gone() {
   log "${description}: gone"
 }
 
+# drain <description> <resource> <operator CSV prefix>: waits until no <resource> is left. If the
+# operator that owns their finalizers is no longer installed (e.g. an interrupted cleanup), the
+# orphaned finalizers are removed instead of waiting forever.
+drain() {
+  local description="$1" resource="$2" csv_prefix="$3" items
+  items() { oc get "$resource" -A --no-headers -o custom-columns=NS:.metadata.namespace,NAME:.metadata.name 2>/dev/null; }
+  if ! oc get csv -A --no-headers -o custom-columns=NAME:.metadata.name 2>/dev/null | grep -q "^${csv_prefix}"; then
+    items | while read -r ns name; do
+      [[ -z "$name" ]] && continue
+      log "Operator for ${resource} is gone; removing finalizers of ${ns}/${name}"
+      if [[ "$ns" == "<none>" ]]; then
+        oc patch "$resource" "$name" --type merge -p '{"metadata":{"finalizers":null}}' >/dev/null
+      else
+        oc patch "$resource" "$name" -n "$ns" --type merge -p '{"metadata":{"finalizers":null}}' >/dev/null
+      fi
+    done
+  fi
+  wait_gone "$description" items
+}
+
 # ---------------------------------------------------------------------------------------------
 # 1. GitOps cleanup: delete the root Application
 # ---------------------------------------------------------------------------------------------
@@ -96,6 +116,8 @@ wait_gone "workshop namespaces" workshop_namespaces
 # ---------------------------------------------------------------------------------------------
 log "Removing TektonConfig (lets the Pipelines operator clean up openshift-pipelines)"
 oc delete tektonconfig config --ignore-not-found --wait=true --timeout=300s
+# The operator removes its TektonInstallerSets asynchronously; its CSV must stay until they are gone.
+drain "TektonInstallerSets" tektoninstallersets.operator.tekton.dev openshift-pipelines-operator-rh
 
 delete_operator() {
   # delete_operator <namespace> <package> : Subscriptions and CSVs of one OLM package
@@ -137,6 +159,18 @@ for plugin in pipelines-console-plugin ossmconsole; do
   [[ -n "$idx" ]] && oc patch consoles.operator.openshift.io cluster --type json \
     -p "[{\"op\":\"remove\",\"path\":\"/spec/plugins/$((idx - 1))\"}]" >/dev/null && log "Disabled console plugin $plugin"
 done
+# ConsolePlugins, SCC, webhooks and cluster RBAC the Pipelines, DevWorkspace, Gitea and Service
+# Mesh operators created at run time (not part of their CSVs, so OLM does not remove them).
+oc delete consoleplugin pipelines-console-plugin ossmconsole --ignore-not-found
+oc delete scc pipelines-scc --ignore-not-found
+oc delete mutatingwebhookconfiguration webhook.operator.tekton.dev --ignore-not-found
+oc delete validatingwebhookconfiguration config.webhook.operator.tekton.dev validation.webhook.operator.tekton.dev \
+  namespace.operator.tekton.dev --ignore-not-found
+for kind in clusterrole clusterrolebinding; do
+  oc get "$kind" --no-headers -o custom-columns=NAME:.metadata.name \
+    | grep -E '^(devworkspace-controller-|devspaces-(edit|view)$|gitea-operator-|openshift-pipelines-|pipelines-scc-|tekton-|servicemesh-|sail-|kiali-)' \
+    | xargs -r oc delete "$kind" --ignore-not-found >/dev/null
+done
 # Java 21 builder tag added by the platform chart's cluster-integration Job.
 oc tag -d openshift/java:openjdk-21-ubi9 >/dev/null 2>&1 && log "Removed openshift/java:openjdk-21-ubi9"
 
@@ -153,12 +187,23 @@ fi
 if [[ "$KEEP_GITOPS" != "true" ]]; then
   log "Removing OpenShift GitOps"
   oc delete clusterrolebinding inner-outer-loop-workshop-provisioner --ignore-not-found
-  oc delete argocd --all -n "$GITOPS_NAMESPACE" --ignore-not-found --wait=true --timeout=300s
+  # The operator re-creates its default instance while it runs, so disable the default instance
+  # first and let the operator remove it (and its finalizer) before uninstalling the operator.
+  oc patch subscriptions.operators.coreos.com openshift-gitops-operator -n openshift-gitops-operator --type merge \
+    -p '{"spec":{"config":{"env":[{"name":"DISABLE_DEFAULT_ARGOCD_INSTANCE","value":"true"}]}}}' >/dev/null 2>&1
+  oc delete argocd --all -A --ignore-not-found --wait=false >/dev/null 2>&1
+  drain "Argo CD instances" argocds.argoproj.io openshift-gitops-operator
   delete_operator openshift-gitops-operator openshift-gitops-operator openshift-gitops-operator
+  oc delete consoleplugin gitops-plugin --ignore-not-found
   oc delete namespace "$GITOPS_NAMESPACE" openshift-gitops-operator --ignore-not-found --wait=false
+  for kind in clusterrole clusterrolebinding; do
+    oc get "$kind" --no-headers -o custom-columns=NAME:.metadata.name \
+      | grep -E '^(openshift-gitops-|gitops-service-|gitopsservices\.)' \
+      | xargs -r oc delete "$kind" --ignore-not-found >/dev/null
+  done
   if [[ "$KEEP_CRDS" != "true" ]]; then
     oc get crd --no-headers -o custom-columns=NAME:.metadata.name \
-      | grep -E '\.argoproj\.io$' | xargs -r oc delete crd --ignore-not-found --wait=false
+      | grep -E '\.argoproj\.io$|^gitopsservices\.pipelines\.openshift\.io$' | xargs -r oc delete crd --ignore-not-found --wait=false
   fi
 else
   oc delete clusterrolebinding inner-outer-loop-workshop-provisioner --ignore-not-found
