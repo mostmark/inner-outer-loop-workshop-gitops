@@ -55,14 +55,18 @@ creds_cluster_password() {
 }
 
 # user_password <user>: the password of a workshop user, from (in this order) the credentials
-# file (WORKSHOP_CREDENTIALS_FILE), WORKSHOP_USER_PASSWORD, or the cluster Secret.
+# file (WORKSHOP_CREDENTIALS_FILE), the cluster Secret (what the workshop was set up with; needs
+# read access to it), or WORKSHOP_USER_PASSWORD. The Secret comes before the environment variable
+# so that a shared password still exported in the shell cannot override per-user passwords.
 user_password() {
   if [[ -n "${WORKSHOP_CREDENTIALS_FILE:-}" ]]; then
     creds_file_password "$WORKSHOP_CREDENTIALS_FILE" "$1"
+  elif creds_cluster_password "$1"; then
+    :
   elif [[ -n "${WORKSHOP_USER_PASSWORD:-}" ]]; then
     printf '%s' "$WORKSHOP_USER_PASSWORD"
   else
-    creds_cluster_password "$1"
+    return 1
   fi
 }
 

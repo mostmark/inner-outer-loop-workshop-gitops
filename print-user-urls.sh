@@ -6,8 +6,8 @@
 #
 # Usage: ./print-user-urls.sh [--users N] [--prefix P] [--names a,b] [--credentials-file FILE] [--csv]
 #
-# Passwords come from (in this order) --credentials-file / WORKSHOP_CREDENTIALS_FILE,
-# WORKSHOP_USER_PASSWORD, or the cluster Secret that bootstrap.sh created (needs cluster-admin).
+# Passwords come from (in this order) --credentials-file / WORKSHOP_CREDENTIALS_FILE, the cluster
+# Secret that bootstrap.sh created (needs cluster-admin), or WORKSHOP_USER_PASSWORD.
 
 set -euo pipefail
 
@@ -76,7 +76,7 @@ urlencode() {
 [[ "$FORMAT" == "csv" ]] && echo "username,lab_guide_url"
 for user in $USERS; do
   password=$(user_password "$user") && [[ -n "$password" ]] \
-    || { echo "Error: no password for $user (credentials file, WORKSHOP_USER_PASSWORD or cluster Secret)." >&2; exit 1; }
+    || { echo "Error: no password for $user (credentials file, cluster Secret or WORKSHOP_USER_PASSWORD)." >&2; exit 1; }
   PASSWORD=$(urlencode "$password")
   url="https://${LAB_GUIDE_HOST}?OPENSHIFT_USERNAME=$(urlencode "$user")&OPENSHIFT_PASSWORD=${PASSWORD}&OPENSHIFT_CONSOLE_URL=${CONSOLE_HOST}&OPENSHIFT_API_URL=${API_HOST}"
   if [[ "$FORMAT" == "csv" ]]; then

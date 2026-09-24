@@ -6,9 +6,9 @@
 #
 # Usage: ./isolation-check.sh [<user-a> <user-b>] [--credentials-file FILE]   (default: user1 user2)
 #
-# Passwords: --credentials-file FILE / WORKSHOP_CREDENTIALS_FILE (one password per user), else
-# WORKSHOP_USER_PASSWORD (shared), else the Secret bootstrap.sh stored in the cluster (needs
-# cluster-admin). See lib/credentials.sh and the README section "User Passwords".
+# Passwords: --credentials-file FILE / WORKSHOP_CREDENTIALS_FILE (one password per user), else the
+# Secret bootstrap.sh stored in the cluster (needs cluster-admin), else WORKSHOP_USER_PASSWORD.
+# See lib/credentials.sh and the README section "User Passwords".
 # Exit code: number of failed checks.
 
 set -uo pipefail

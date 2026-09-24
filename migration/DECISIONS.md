@@ -249,5 +249,7 @@ The passwords are stored only in the cluster (Secret `gitea/workshop-user-passwo
 checksum of the Secret (not the passwords) is a Helm parameter on the root Application, so a
 password change makes the users Application OutOfSync and re-runs the user-setup Job (Argo CD
 hooks alone would not notice a changed Secret). `print-user-urls.sh` and the smoke tests share
-`lib/credentials.sh` and fall back to reading the cluster Secret as cluster-admin, so instructors
-do not need to keep the passwords at hand after bootstrapping.
+`lib/credentials.sh` and read the cluster Secret as cluster-admin, so instructors do not need to
+keep the passwords at hand after bootstrapping. Their order is an explicit credentials file, the
+cluster Secret, then `WORKSHOP_USER_PASSWORD`: testing showed that a shared password still
+exported in the instructor's shell would otherwise override per-user passwords.

@@ -191,8 +191,10 @@ password. Users in the file that are not configured are ignored. Keep the file o
 `bootstrap.sh` stores the passwords only in the cluster, in Secret `workshop-user-password` in
 namespace `gitea` (key `userPassword` for the shared password, `password.<user>` per user).
 `print-user-urls.sh` and the smoke tests read the passwords from there when you are logged in as
-cluster-admin, so they need neither the environment variable nor the file (both still take
-precedence when set, and every script accepts `--credentials-file`).
+cluster-admin, so they need neither the environment variable nor the file. Their order is: a
+credentials file (`--credentials-file` or `WORKSHOP_CREDENTIALS_FILE`), then the cluster Secret,
+then `WORKSHOP_USER_PASSWORD`, so a shared password still exported in your shell does not
+override per-user passwords.
 
 To change passwords or switch the mode on an installed workshop, update the users in the
 identity provider, then run `bootstrap.sh` again with the new password or file. It stores a
@@ -320,14 +322,14 @@ namespace. The guide derives the apps domain from the console host name. To prin
 ready-to-use URL of every participant:
 
 ```bash
-./print-user-urls.sh          # or --csv; as cluster-admin, reads the passwords from the cluster
+./print-user-urls.sh          # or --csv; reads the passwords from the cluster
 ```
 
 ## Smoke Tests
 
 ```bash
 # All as cluster-admin: the scripts read each user's password from the cluster
-# (WORKSHOP_USER_PASSWORD or --credentials-file take precedence when given).
+# (--credentials-file takes precedence when given).
 ./smoke-tests/platform-check.sh
 ./smoke-tests/user-journey.sh user1
 ./smoke-tests/isolation-check.sh user1 user2

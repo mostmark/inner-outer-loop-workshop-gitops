@@ -106,7 +106,7 @@ check "URL template ConfigMap" bash -c "oc get configmap lab-guide-url-template 
 check_http "Start page" "https://${GUIDE}/modules/index.html" 200
 first_user=$(echo "$USERS" | awk '{print $1}')
 if [[ -n "$first_user" ]]; then
-  # Passwords from WORKSHOP_CREDENTIALS_FILE, WORKSHOP_USER_PASSWORD or the cluster Secret.
+  # Passwords from WORKSHOP_CREDENTIALS_FILE, the cluster Secret or WORKSHOP_USER_PASSWORD.
   url=$("${SCRIPT_DIR}/../print-user-urls.sh" --names "$first_user" 2>/dev/null | awk '{print $2}')
   check "print-user-urls.sh prints a URL for $first_user" test -n "$url"
   check "Per-user URL renders" bash -c "curl -skf '$url' >/dev/null"

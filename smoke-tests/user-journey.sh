@@ -16,9 +16,9 @@
 #   --keep-going  continue after a failed step (default: stop at the first failure)
 #   --outer-only  skip Part 1 (expects the Part 1 state in my-project-<user>, e.g. after
 #                 the devfile command "Inner Loop - Deploy Coolstore")
-# Passwords: --credentials-file FILE / WORKSHOP_CREDENTIALS_FILE (one password per user), else
-# WORKSHOP_USER_PASSWORD (shared), else the Secret bootstrap.sh stored in the cluster (needs
-# cluster-admin). See lib/credentials.sh and the README section "User Passwords".
+# Passwords: --credentials-file FILE / WORKSHOP_CREDENTIALS_FILE (one password per user), else the
+# Secret bootstrap.sh stored in the cluster (needs cluster-admin), else WORKSHOP_USER_PASSWORD.
+# See lib/credentials.sh and the README section "User Passwords".
 # Exit code: number of failed steps.
 
 set -uo pipefail
@@ -48,7 +48,7 @@ done
 creds_check_source || exit 1
 # Read before logging in as the user: the cluster Secret fallback needs the admin login.
 PASSWORD=$(user_password "$USERNAME") && [[ -n "$PASSWORD" ]] \
-  || { echo "Error: no password for $USERNAME (credentials file, WORKSHOP_USER_PASSWORD or cluster Secret)." >&2; exit 1; }
+  || { echo "Error: no password for $USERNAME (credentials file, cluster Secret or WORKSHOP_USER_PASSWORD)." >&2; exit 1; }
 
 API=$(oc whoami --show-server 2>/dev/null)
 DOMAIN=$(oc get ingresses.config cluster -o jsonpath='{.spec.domain}' 2>/dev/null)
