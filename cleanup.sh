@@ -70,24 +70,27 @@ wait_gone() {
   log "${description}: gone"
 }
 
-# drain <description> <resource> <operator CSV prefix>: waits until no <resource> is left. If the
-# operator that owns their finalizers is no longer installed (e.g. an interrupted cleanup), the
-# orphaned finalizers are removed instead of waiting forever.
+# drain <description> <resource> <operator CSV prefix>: deletes every <resource> and waits until
+# they are gone. If the operator that owns their finalizers is no longer installed (it has just
+# been removed, or an earlier cleanup was interrupted), the orphaned finalizers are removed instead
+# of waiting forever.
 drain() {
-  local description="$1" resource="$2" csv_prefix="$3" items
+  local description="$1" resource="$2" csv_prefix="$3" csvs
   items() { oc get "$resource" -A --no-headers -o custom-columns=NS:.metadata.namespace,NAME:.metadata.name 2>/dev/null; }
-  local csvs
+  item_cmd() { # item_cmd <ns> <name> <oc verb and args...>
+    local ns="$1" name="$2"; shift 2
+    if [[ "$ns" == "<none>" ]]; then oc "$@" "$resource" "$name"; else oc "$@" "$resource" "$name" -n "$ns"; fi
+  }
+  items | while read -r ns name; do
+    [[ -n "$name" ]] && item_cmd "$ns" "$name" delete --ignore-not-found --wait=false >/dev/null
+  done
   # Captured first: with pipefail, "oc ... | grep -q" fails when grep exits early (SIGPIPE).
   csvs=$(oc get csv -A --no-headers -o custom-columns=NAME:.metadata.name 2>/dev/null)
   if ! grep -q "^${csv_prefix}" <<<"$csvs"; then
     items | while read -r ns name; do
       [[ -z "$name" ]] && continue
       log "Operator for ${resource} is gone; removing finalizers of ${ns}/${name}"
-      if [[ "$ns" == "<none>" ]]; then
-        oc patch "$resource" "$name" --type merge -p '{"metadata":{"finalizers":null}}' >/dev/null
-      else
-        oc patch "$resource" "$name" -n "$ns" --type merge -p '{"metadata":{"finalizers":null}}' >/dev/null
-      fi
+      item_cmd "$ns" "$name" patch --type merge -p '{"metadata":{"finalizers":null}}' >/dev/null
     done
   fi
   wait_gone "$description" items
