@@ -76,7 +76,10 @@ wait_gone() {
 drain() {
   local description="$1" resource="$2" csv_prefix="$3" items
   items() { oc get "$resource" -A --no-headers -o custom-columns=NS:.metadata.namespace,NAME:.metadata.name 2>/dev/null; }
-  if ! oc get csv -A --no-headers -o custom-columns=NAME:.metadata.name 2>/dev/null | grep -q "^${csv_prefix}"; then
+  local csvs
+  # Captured first: with pipefail, "oc ... | grep -q" fails when grep exits early (SIGPIPE).
+  csvs=$(oc get csv -A --no-headers -o custom-columns=NAME:.metadata.name 2>/dev/null)
+  if ! grep -q "^${csv_prefix}" <<<"$csvs"; then
     items | while read -r ns name; do
       [[ -z "$name" ]] && continue
       log "Operator for ${resource} is gone; removing finalizers of ${ns}/${name}"
