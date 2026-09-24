@@ -39,4 +39,9 @@ until [[ "$(oc get deployment lab-guide -n lab-guide -o jsonpath='{.spec.templat
   sleep 5
 done
 oc rollout status deployment/lab-guide -n lab-guide --timeout=300s
-echo "Done. The lab guide now shows: $(case "$PART" in all) echo "Part 1 and Part 2";; inner) echo "Part 1 (Inner Loop) only";; outer) echo "Part 2 (Outer Loop) only";; esac)."
+case "$PART" in
+  all) shown="Part 1 and Part 2" ;;
+  inner) shown="Part 1 (Inner Loop) only" ;;
+  outer) shown="Part 2 (Outer Loop) only" ;;
+esac
+echo "Done. The lab guide now shows: ${shown}."
