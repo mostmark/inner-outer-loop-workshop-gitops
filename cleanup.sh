@@ -217,9 +217,45 @@ namespaces_left() {
 }
 wait_gone "operator namespaces" namespaces_left
 
+# ---------------------------------------------------------------------------------------------
+# 4. Verify the end state: fail loudly if anything the workshop or its operators created is left
+# ---------------------------------------------------------------------------------------------
+leftovers() {
+  oc get namespaces --no-headers -o custom-columns=NAME:.metadata.name \
+    | grep -E '^(my-project-|cn-project-|devspaces-|lab-guide$|workshop-setup$|openshift-devspaces$|istio-system$|istio-cni$|argocd$|gitea$|nexus$|kiali-operator$|gitea-operator$|openshift-pipelines$)' \
+    | sed 's/^/namespace /'
+  oc get csv -A --no-headers -o custom-columns=NAME:.metadata.name 2>/dev/null | sort -u \
+    | grep -E '^(devspacesoperator|devworkspace-operator|openshift-pipelines-operator-rh|servicemeshoperator3|kiali-operator|gitea-operator)' \
+    | sed 's/^/csv /'
+  if [[ "$KEEP_CRDS" != "true" ]]; then
+    oc get crd --no-headers -o custom-columns=NAME:.metadata.name \
+      | grep -E '\.(devfile\.io|eclipse\.che|tekton\.dev|istio\.io|sailoperator\.io|kiali\.io|pfe\.rhpds\.com)$' | sed 's/^/crd /'
+  fi
+  oc get mutatingwebhookconfigurations,validatingwebhookconfigurations --no-headers -o custom-columns=NAME:.metadata.name \
+    | grep -E 'tekton|devfile|istio|checluster' | sed 's/^/webhook /'
+  oc get consoleplugin --no-headers -o custom-columns=NAME:.metadata.name | grep -E '^(pipelines-console-plugin|ossmconsole)$' | sed 's/^/consoleplugin /'
+  oc get scc pipelines-scc --no-headers -o name 2>/dev/null
+  oc get configmap cluster-monitoring-config -n openshift-monitoring --no-headers -o name 2>/dev/null
+  oc get template coolstore-mariadb coolstore-postgresql -n openshift --no-headers -o name 2>/dev/null
+  oc get istag java:openjdk-21-ubi9 -n openshift --no-headers -o name 2>/dev/null
+  if [[ "$KEEP_GITOPS" != "true" ]]; then
+    oc get namespace "$GITOPS_NAMESPACE" openshift-gitops-operator --no-headers -o name 2>/dev/null
+    oc get csv -A --no-headers -o custom-columns=NAME:.metadata.name 2>/dev/null | sort -u | grep '^openshift-gitops-operator' | sed 's/^/csv /'
+    [[ "$KEEP_CRDS" == "true" ]] || oc get crd --no-headers -o custom-columns=NAME:.metadata.name | grep -E '\.argoproj\.io$' | sed 's/^/crd /'
+  fi
+}
+remaining=$(leftovers)
+if [[ -n "$remaining" ]]; then
+  echo
+  log "Cleanup incomplete. Still present:"
+  echo "$remaining"
+  exit 1
+fi
+
 echo
 echo "============================================"
-echo "Workshop cleanup complete."
+echo "Workshop cleanup complete; verified that no workshop namespaces, operators, CRDs,"
+echo "webhooks or cluster additions are left."
 echo "Kept by design: the pre-created OpenShift users, the openshift-user-workload-monitoring"
 echo "namespace (managed by the cluster monitoring operator)."
 echo "============================================"
