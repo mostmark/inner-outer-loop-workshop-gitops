@@ -79,6 +79,22 @@ check "$A cannot delete $B's Application" test "$(code -X DELETE -H "Authorizati
 code -X DELETE -H "Authorization: Bearer $TOKEN_A" "$ARGOCD/applications/isolation-probe-$A?cascade=false" >/dev/null
 code -X DELETE -H "Authorization: Bearer $TOKEN_B" "$ARGOCD/applications/isolation-probe-$B?cascade=false" >/dev/null
 
+section "Argo CD SSO (LOG IN VIA OPENSHIFT): $A vs $B"
+SSO_A=$("${SCRIPT_DIR}/argocd-sso-token.py" "$A" "$DOMAIN" 2>/dev/null)
+check "$A logs in to Argo CD through OpenShift" test -n "$SSO_A"
+check "$A's SSO session is mapped to user $A" bash -c \
+  "curl -sk -H 'Cookie: argocd.token=$SSO_A' '$ARGOCD/session/userinfo' | grep -q '\"username\":\"$A\"'"
+check "$A (SSO) can read their own project" test "$(code -H "Cookie: argocd.token=$SSO_A" "$ARGOCD/projects/cn-project-$A")" = 200
+check "$A (SSO) cannot read $B's project" test "$(code -H "Cookie: argocd.token=$SSO_A" "$ARGOCD/projects/cn-project-$B")" = 403
+check "$A (SSO) cannot create an Application in $B's project" test "$(code -X POST -H "Cookie: argocd.token=$SSO_A" \
+  -d "$(probe_app "isolation-probe-z" "cn-project-$B" "cn-project-$B")" "$ARGOCD/applications?validate=false")" = 403
+GITOPS="https://openshift-gitops-server-openshift-gitops.${DOMAIN}/api/v1"
+SSO_GITOPS_A=$("${SCRIPT_DIR}/argocd-sso-token.py" "$A" "$DOMAIN" openshift-gitops-server-openshift-gitops 2>/dev/null)
+check "$A (SSO) sees no Applications in the admin-only openshift-gitops instance" bash -c \
+  "[ -n '$SSO_GITOPS_A' ] && curl -sk -H 'Cookie: argocd.token=$SSO_GITOPS_A' '$GITOPS/applications' | grep -q '\"items\":null\|\"items\":\[\]'"
+check "$A (SSO) cannot read the root Application in openshift-gitops" test \
+  "$(code -H "Cookie: argocd.token=$SSO_GITOPS_A" "$GITOPS/applications/inner-outer-loop-workshop")" = 403
+
 section "Gitea: $A vs repositories of $B"
 gitea_code "$B" -X POST -H 'Content-Type: application/json' -d '{"name":"isolation-probe","auto_init":true}' "$GITEA/user/repos" >/dev/null
 check "$B owns repository isolation-probe" test "$(gitea_code "$B" "$GITEA/repos/$B/isolation-probe")" = 200
