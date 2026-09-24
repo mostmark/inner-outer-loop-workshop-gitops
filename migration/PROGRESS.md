@@ -43,6 +43,12 @@
   installation both ways and from scratch (cleanup + bootstrap with a credentials file): platform
   116/116, isolation 44/44, user journey 76/76 (FINAL-REPORT section 5). The test users are back
   on `WORKSHOP_USER_PASSWORD`; the cluster runs shared mode with 3 users.
+- 2026-09-24: Terminal > New Terminal stayed empty in the pre-created workspaces (KNOWN-ISSUES
+  K18, DECISIONS D21), found by the owner on a second cluster (OpenShift 4.21, 5 users with
+  per-user passwords). Fixed with ConfigMap `workshop-devspaces-env` from the user-setup Job;
+  verified there after an Argo CD sync of `main` (workspaces restarted by the DevWorkspace
+  operator): new terminals start a shell in a browser test as user2 and user3, platform-check
+  160/160 (150/10 before), isolation-check user4/user5 44/44.
 
 ## Next
 
