@@ -11,8 +11,9 @@
 #     installed) and the DevWorkspace operator dependency OLM added,
 #   - the operator namespaces kept with Delete=false (kiali-operator, gitea-operator), so the
 #     operators could still process their resources' finalizers during the Argo CD cleanup,
-#   - objects created by the operators themselves (TektonConfig, the openshift-pipelines
-#     namespace, DevWorkspace webhooks, console plugin entries),
+#   - objects created by the operators themselves (TektonConfig and its TektonInstallerSets, the
+#     openshift-pipelines namespace, DevWorkspace and Tekton webhooks, ConsolePlugins and console
+#     plugin entries, the pipelines SCC, operator ClusterRoles/Bindings),
 #   - the Java 21 tag added to openshift/java and the operators' CRDs (unless --keep-crds),
 #   - OpenShift GitOps itself, installed by bootstrap.sh (unless --keep-gitops).
 #
@@ -33,7 +34,7 @@ while [[ $# -gt 0 ]]; do
     --keep-gitops) KEEP_GITOPS=true; shift ;;
     --keep-crds) KEEP_CRDS=true; shift ;;
     --timeout) TIMEOUT="$2"; shift 2 ;;
-    -h|--help) sed -n '3,20p' "$0"; exit 0 ;;
+    -h|--help) sed -n '3,21p' "$0"; exit 0 ;;
     *) echo "Unknown option: $1" >&2; exit 1 ;;
   esac
 done
