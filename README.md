@@ -90,8 +90,9 @@ export WORKSHOP_USER_PASSWORD='<password of the workshop users>'
 ```
 
 `bootstrap.sh` is idempotent. It waits (default up to 60 minutes) until every Application is
-Synced and Healthy and prints the lab guide URL template. A fresh install takes about 25 to 35
-minutes, mostly operator installation and the first workspace start.
+Synced and Healthy and prints the lab guide URL template. A fresh install took about 10 minutes
+on the test cluster (operators about 4, platform about 4, users about 1), plus 2 to 3 minutes until
+the pre-started workspaces are running.
 
 Options: `--users N`, `--prefix PREFIX`, `--names a,b,c`, `--repo URL`, `--revision REV`,
 `--timeout SECONDS`, `--no-wait`. `GITOPS_CHANNEL` overrides the OpenShift GitOps channel
