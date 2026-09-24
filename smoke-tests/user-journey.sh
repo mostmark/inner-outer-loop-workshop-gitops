@@ -9,11 +9,13 @@
 # Outer Loop: push to Gitea, CI pipeline, GitOps export and Argo CD sync in the participant
 #             instance, CD pipelines, Service Mesh (sidecars, gateway, traffic, Kiali graph).
 #
-# Usage: WORKSHOP_USER_PASSWORD=... ./user-journey.sh <username> [--reset] [--keep-going]
+# Usage: WORKSHOP_USER_PASSWORD=... ./user-journey.sh <username> [--reset] [--keep-going] [--outer-only]
 #   --reset       only return the user to the initial state (removes the user's Coolstore
 #                 resources, Argo CD Applications/repositories, Gitea repositories and local
 #                 changes in the workspace), then exit
 #   --keep-going  continue after a failed step (default: stop at the first failure)
+#   --outer-only  skip Part 1 (expects the Part 1 state in my-project-<user>, e.g. after
+#                 the devfile command "Inner Loop - Deploy Coolstore")
 # Exit code: number of failed steps.
 
 set -uo pipefail
@@ -25,11 +27,13 @@ source "${SCRIPT_DIR}/lib.sh"
 USERNAME=""
 RESET=false
 KEEP_GOING=false
+OUTER_ONLY=false
 for arg in "$@"; do
   case "$arg" in
     --reset) RESET=true ;;
+    --outer-only) OUTER_ONLY=true ;;
     --keep-going) KEEP_GOING=true ;;
-    -h|--help) sed -n '3,19p' "$0"; exit 0 ;;
+    -h|--help) sed -n '3,21p' "$0"; exit 0 ;;
     *) USERNAME="$arg" ;;
   esac
 done
@@ -124,6 +128,11 @@ if [[ "$RESET" == "true" ]]; then
 fi
 
 # ---------------------------------------------------------------------------------------------
+# A workspace clones the code repository when it is first created; bring it to the latest main
+# (the participant would do the same with "git pull") so the test uses the current scripts.
+step "Workspace sources are up to date with main" ws "git fetch -q origin main && git reset -q --hard origin/main"
+
+if [[ "$OUTER_ONLY" != "true" ]]; then
 section "Part 1 - Inner Loop"
 step "Devfile 'OpenShift - Login'" devfile openshift---login
 step "Workspace oc session is ${USERNAME}" ws "test \"\$(oc whoami)\" = '${USERNAME}'"
@@ -133,7 +142,7 @@ step "Workspace current project is ${DEV}" ws "test \"\$(oc project -q)\" = '${D
 step "Inventory: add the solution code" ws ".tasks/solutions/inventory-quarkus/solve.sh"
 step "Inventory: devfile 'Inventory - Deploy Component'" devfile inventory---deploy-component
 step "Inventory: rollout" rollout "$DEV" inventory-coolstore
-step "Inventory: route answers /api/inventory" wait_for 180 http_ok "http://inventory-coolstore-${DEV}.${DOMAIN}/api/inventory" itemId
+step "Inventory: route answers /api/inventory/329299" wait_for 180 http_ok "http://inventory-coolstore-${DEV}.${DOMAIN}/api/inventory/329299" itemId
 
 step "Catalog: add the solution code" ws ".tasks/solutions/catalog-spring-boot/solve.sh"
 step "Catalog: devfile 'Catalog - Deploy Component'" devfile catalog---deploy-component
@@ -163,14 +172,19 @@ step "Configuration: inventory rolled out" rollout "$DEV" inventory-coolstore
 step "Configuration: catalog rolled out" rollout "$DEV" catalog-coolstore
 step "Configuration: inventory uses MariaDB" bash -c \
   "oc get configmap inventory -n $DEV -o jsonpath='{.data.application\\.properties}' | grep -q mariadb"
-step "Configuration: inventory still serves data" wait_for 300 http_ok "http://inventory-coolstore-${DEV}.${DOMAIN}/api/inventory" itemId
+step "Configuration: inventory still serves data" wait_for 300 http_ok "http://inventory-coolstore-${DEV}.${DOMAIN}/api/inventory/329299" itemId
 step "Configuration: catalog still serves data" wait_for 300 http_ok "http://catalog-coolstore-${DEV}.${DOMAIN}/api/catalog" itemId
 step "Configuration: web UI through the gateway" wait_for 180 http_ok "http://gateway-coolstore-${DEV}.${DOMAIN}/api/products" itemId
 
+fi
+
 # ---------------------------------------------------------------------------------------------
 section "Part 2 - Outer Loop"
+if [[ "$OUTER_ONLY" == "true" ]]; then
+  step "Devfile 'OpenShift - Login'" devfile openshift---login
+fi
 step "CI: push inventory to Gitea and create the pipeline" ws ".tasks/solutions/continuous-integration/solve.sh"
-step "CI: repository ${USERNAME}/inventory-quarkus has a main branch" \
+step "CI: repository ${USERNAME}/inventory-quarkus has a main branch" wait_for 120 \
   http_ok "https://gitea-server-gitea.${DOMAIN}/api/v1/repos/${USERNAME}/inventory-quarkus/branches/main"
 pipelinerun_succeeded() { # pipelinerun_succeeded <name>
   [[ "$(oc get pipelinerun "$1" -n "$STAGING" -o jsonpath='{.status.conditions[?(@.type=="Succeeded")].status}')" == "True" ]]
@@ -194,7 +208,7 @@ step "CI: PipelineRun $PR succeeded (git-clone, s2i-java)" wait_for 1500 pipelin
 step "CI: image inventory-coolstore in ${STAGING}" bash -c "oc get istag inventory-coolstore:latest -n $STAGING >/dev/null"
 
 step "GitOps: export and push the configuration, create the Argo CD Applications" ws ".tasks/solutions/gitops/solve.sh"
-step "GitOps: repository ${USERNAME}/inventory-gitops has the manifests" \
+step "GitOps: repository ${USERNAME}/inventory-gitops has the manifests" wait_for 120 \
   http_ok "https://gitea-server-gitea.${DOMAIN}/api/v1/repos/${USERNAME}/inventory-gitops/contents/deployment.yaml?ref=main"
 step "GitOps: no DeploymentConfig in the export" ws "! grep -rl 'kind: DeploymentConfig' labs/gitops"
 step "GitOps: Application inventory-${USERNAME} in the participant Argo CD" ws \
@@ -237,10 +251,17 @@ kiali_graph() {
   token=$(oc whoami -t)
   curl -sk --max-time 30 -H "Authorization: Bearer ${token}" \
     "https://kiali-istio-system.${DOMAIN}/api/namespaces/graph?namespaces=${STAGING}&graphType=workload&duration=600s" \
-    | tee "${WORK}/graph.json" | grep -q '"edges":\[{'
+    > "${WORK}/graph.json" && jq -e '.elements.edges | length > 0' "${WORK}/graph.json"
 }
 step "Mesh: Kiali shows traffic in ${STAGING} (graph has edges)" wait_for 300 kiali_graph
-step "Mesh: Kiali graph contains gateway -> catalog" bash -c \
-  "grep -q 'gateway-coolstore' '${WORK}/graph.json' && grep -q 'catalog-coolstore' '${WORK}/graph.json'"
+kiali_edge() { # kiali_edge <source workload> <target workload prefix>
+  jq -e --arg s "$1" --arg t "$2" '
+    (.elements.nodes | map({key: .data.id, value: (.data.workload // .data.service // "")}) | from_entries) as $n
+    | [.elements.edges[] | select($n[.data.source] == $s and ($n[.data.target] | startswith($t)))] | length > 0' \
+    "${WORK}/graph.json"
+}
+step "Mesh: Kiali graph has istio-ingressgateway -> gateway-coolstore" kiali_edge istio-ingressgateway gateway-coolstore
+step "Mesh: Kiali graph has gateway-coolstore -> inventory-coolstore" kiali_edge gateway-coolstore inventory-coolstore
+step "Mesh: Kiali graph has gateway-coolstore -> catalog-coolstore" kiali_edge gateway-coolstore catalog-coolstore
 
 summary
