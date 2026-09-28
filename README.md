@@ -264,7 +264,8 @@ from `guidePart`, selects the one httpd serves.
 | `cn-project-<user>` | Part 2 staging project; labels `istio-discovery=enabled`, `argocd.argoproj.io/managed-by=argocd`; PodMonitor for Envoy metrics; Secret `argocd-env-secret` (Argo CD API token) | `edit` |
 | `devspaces-<user>` | DevWorkspace `wksp-end-to-end-dev` (started by default), VS Code editor template, ConfigMaps `workshop-env` and `workshop-devspaces-env` (Dev Spaces URLs, written by the user-setup Job), Secrets `workshop-credentials` and `workshop-git-credentials` | `admin` |
 
-Also per user: Argo CD AppProject `cn-project-<user>` (namespace `argocd`) and RBAC role, an
+Also per user: Role `kiali-edit-workaround` in `cn-project-<user>` (lets participants edit Istio
+config in Kiali 2.27, KNOWN-ISSUES K19), Argo CD AppProject `cn-project-<user>` (namespace `argocd`) and RBAC role, an
 Argo CD local account with the `apiKey` capability only, and a Gitea account with the workshop
 password (the shared one or the user's own).
 

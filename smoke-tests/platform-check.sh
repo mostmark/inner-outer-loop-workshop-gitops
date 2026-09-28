@@ -71,6 +71,26 @@ check "Nexus Maven group readable anonymously" in_cluster_http \
   "http://nexus.nexus.svc:8081/repository/maven-all-public/org/apache/maven/plugins/maven-clean-plugin/maven-metadata.xml" 200
 
 section "Per-user resources"
+# Kiali before 2.28 checks edit permissions with the kind name ("VirtualService"); the users chart
+# adds a matching Role (KNOWN-ISSUES K19). Checked only while such a Kiali is installed.
+KIALI_VERSION=$(oc get kiali -n istio-system -o jsonpath='{.items[0].status.operatorVersion}' 2>/dev/null)
+KIALI_NEEDS_WORKAROUND=false
+if [[ "$KIALI_VERSION" =~ ^v?2\.([0-9]+)\. ]] && (( BASH_REMATCH[1] < 28 )); then KIALI_NEEDS_WORKAROUND=true; fi
+# kiali_can_edit <user>: the access review Kiali makes before enabling its YAML editor.
+kiali_can_edit() {
+  oc create -o jsonpath='{.status.allowed}' -f - <<EOF_SAR 2>/dev/null | grep -qx true
+apiVersion: authorization.k8s.io/v1
+kind: SubjectAccessReview
+spec:
+  user: $1
+  groups: ["system:authenticated", "system:authenticated:oauth"]
+  resourceAttributes:
+    namespace: cn-project-$1
+    group: networking.istio.io
+    resource: VirtualService
+    verb: patch
+EOF_SAR
+}
 for user in $USERS; do
   for ns in "my-project-$user" "cn-project-$user" "devspaces-$user"; do
     check "$user: namespace $ns" bash -c "oc get namespace $ns >/dev/null"
@@ -81,6 +101,9 @@ for user in $USERS; do
     "$(oc get namespace "cn-project-$user" -o jsonpath='{.metadata.labels.istio-discovery}')" = "enabled"
   check "$user: cn-project managed by participant Argo CD" test \
     "$(oc get namespace "cn-project-$user" -o jsonpath='{.metadata.labels.argocd\.argoproj\.io/managed-by}')" = "argocd"
+  if $KIALI_NEEDS_WORKAROUND; then
+    check "$user: can edit Istio config in Kiali $KIALI_VERSION (K19 workaround)" kiali_can_edit "$user"
+  fi
   check "$user: AppProject cn-project-$user" bash -c "oc get appproject cn-project-$user -n argocd >/dev/null"
   check "$user: Argo CD token secret" bash -c "oc get secret argocd-env-secret -n cn-project-$user >/dev/null"
   check "$user: workspace credentials" bash -c \

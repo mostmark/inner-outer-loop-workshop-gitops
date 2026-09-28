@@ -35,6 +35,42 @@ subjects:
   - apiGroup: rbac.authorization.k8s.io
     kind: User
     name: {{ $user | quote }}
+{{- if $.Values.kialiEditWorkaround }}
+---
+# Workaround for Kiali 2.27 (OSSM 3.4): before enabling its YAML editor, Kiali checks the user's
+# permissions with the kind name ("VirtualService") instead of the resource name
+# ("virtualservices"), so only roles with "*" pass and participants get a read-only editor in
+# Kiali and in the console's Service Mesh menu. These rules match that check and grant nothing
+# else: no API resource has these names. Kiali saves with the participant's own token, which the
+# edit role above allows. Fixed upstream in Kiali 2.28 (KNOWN-ISSUES K19).
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: kiali-edit-workaround
+  namespace: {{ printf "cn-project-%s" $user | quote }}
+  labels:
+    {{- include "workshop.labels" $ | nindent 4 }}
+rules:
+  - apiGroups: ["networking.istio.io"]
+    resources: ["VirtualService", "DestinationRule", "Gateway"]
+    verbs: ["create", "patch", "delete"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: {{ printf "%s-kiali-edit-workaround" $user | quote }}
+  namespace: {{ printf "cn-project-%s" $user | quote }}
+  labels:
+    {{- include "workshop.labels" $ | nindent 4 }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: kiali-edit-workaround
+subjects:
+  - apiGroup: rbac.authorization.k8s.io
+    kind: User
+    name: {{ $user | quote }}
+{{- end }}
 ---
 # Quarkus and Spring Boot read their ConfigMaps through the Kubernetes API in staging.
 apiVersion: rbac.authorization.k8s.io/v1

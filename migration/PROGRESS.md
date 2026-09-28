@@ -49,6 +49,9 @@
   verified there after an Argo CD sync of `main` (workspaces restarted by the DevWorkspace
   operator): new terminals start a shell in a browser test as user2 and user3, platform-check
   160/160 (150/10 before), isolation-check user4/user5 44/44.
+- 2026-09-28: participants could not edit Istio config in Kiali or the console's Service Mesh menu
+  (owner's report). Cause: Kiali 2.27 checks permissions with the kind name (KNOWN-ISSUES K19,
+  fixed upstream in 2.28). Workaround Role in the users chart, tested on leia before and after.
 
 ## Next
 
