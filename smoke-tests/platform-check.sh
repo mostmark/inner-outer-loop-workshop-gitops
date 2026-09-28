@@ -73,7 +73,7 @@ check "Nexus Maven group readable anonymously" in_cluster_http \
 section "Per-user resources"
 # Kiali before 2.28 checks edit permissions with the kind name ("VirtualService"); the users chart
 # adds a matching Role (KNOWN-ISSUES K19). Checked only while such a Kiali is installed.
-KIALI_VERSION=$(oc get kiali -n istio-system -o jsonpath='{.items[0].status.operatorVersion}' 2>/dev/null)
+KIALI_VERSION=$(oc get kiali -n istio-system -o jsonpath='{.items[0].status.environment.operatorVersion}' 2>/dev/null)
 KIALI_NEEDS_WORKAROUND=false
 if [[ "$KIALI_VERSION" =~ ^v?2\.([0-9]+)\. ]] && (( BASH_REMATCH[1] < 28 )); then KIALI_NEEDS_WORKAROUND=true; fi
 # kiali_can_edit <user>: the access review Kiali makes before enabling its YAML editor.
