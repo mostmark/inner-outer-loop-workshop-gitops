@@ -58,6 +58,13 @@ check "Pipelines console plugin enabled" bash -c \
   "oc get consoles.operator.openshift.io cluster -o jsonpath='{.spec.plugins}' | grep -q pipelines-console-plugin"
 check "Java 21 builder tag openshift/java:openjdk-21-ubi9" bash -c "oc get istag java:openjdk-21-ubi9 -n openshift >/dev/null"
 check "Database templates in openshift" bash -c "oc get template coolstore-mariadb coolstore-postgresql -n openshift >/dev/null"
+# OpenShift's look-alike sample database templates are hidden (KNOWN-ISSUES K20), unless the
+# platform chart's databaseTemplates.hideSampleTemplates is switched off.
+if [[ -n "$(oc get configs.samples.operator.openshift.io cluster -o jsonpath='{.spec.skippedTemplates}' 2>/dev/null)" ]] \
+    || oc get job hide-sample-templates -n workshop-setup >/dev/null 2>&1; then
+  check "Sample database templates hidden (mariadb/postgresql-ephemeral/-persistent)" bash -c \
+    "[ -z \"\$(oc get template mariadb-ephemeral mariadb-persistent postgresql-ephemeral postgresql-persistent -n openshift -o name --ignore-not-found)\" ]"
+fi
 
 section "Routes"
 DOMAIN=$(apps_domain)

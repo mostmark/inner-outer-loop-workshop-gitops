@@ -1,0 +1,136 @@
+{{- if and .Values.databaseTemplates.enabled .Values.databaseTemplates.hideSampleTemplates }}
+{{- $hidden := .Values.databaseTemplates.hiddenSampleTemplates }}
+---
+# Hides OpenShift's sample database templates ("MariaDB (Ephemeral)", "PostgreSQL (Ephemeral)" ...)
+# so that participants can only pick the workshop's Coolstore templates in the Software Catalog.
+# The samples create DeploymentConfigs with EOL versions (MariaDB 10.3, PostgreSQL 10); with
+# MariaDB 10.3 the inventory service fails at startup because it is built for db-version 10.5
+# (KNOWN-ISSUES K20). The Samples operator owns this object: Argo CD only sets skippedTemplates
+# (server-side apply) and never deletes it; cleanup.sh removes the entries again.
+apiVersion: samples.operator.openshift.io/v1
+kind: Config
+metadata:
+  name: cluster
+  annotations:
+    argocd.argoproj.io/sync-options: ServerSideApply=true,Delete=false
+spec:
+  skippedTemplates:
+    {{- toYaml $hidden | nindent 4 }}
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: hide-sample-templates
+  namespace: {{ .Values.setupNamespace | quote }}
+  labels:
+    {{- include "workshop.labels" . | nindent 4 }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: workshop-hide-sample-templates
+  labels:
+    {{- include "workshop.labels" . | nindent 4 }}
+rules:
+  - apiGroups: ["samples.operator.openshift.io"]
+    resources: ["configs"]
+    resourceNames: ["cluster"]
+    verbs: ["get"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: workshop-hide-sample-templates
+  labels:
+    {{- include "workshop.labels" . | nindent 4 }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: workshop-hide-sample-templates
+subjects:
+  - kind: ServiceAccount
+    name: hide-sample-templates
+    namespace: {{ .Values.setupNamespace | quote }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: workshop-hide-sample-templates
+  namespace: {{ .Values.databaseTemplates.namespace | quote }}
+  labels:
+    {{- include "workshop.labels" . | nindent 4 }}
+rules:
+  - apiGroups: ["template.openshift.io"]
+    resources: ["templates"]
+    resourceNames:
+      {{- toYaml $hidden | nindent 6 }}
+    verbs: ["get", "delete"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: workshop-hide-sample-templates
+  namespace: {{ .Values.databaseTemplates.namespace | quote }}
+  labels:
+    {{- include "workshop.labels" . | nindent 4 }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: workshop-hide-sample-templates
+subjects:
+  - kind: ServiceAccount
+    name: hide-sample-templates
+    namespace: {{ .Values.setupNamespace | quote }}
+---
+# The Samples operator only stops recreating skipped templates; existing ones must be deleted.
+# Waits until the skip list is in place (otherwise the operator would recreate them), then deletes.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: hide-sample-templates
+  namespace: {{ .Values.setupNamespace | quote }}
+  labels:
+    {{- include "workshop.labels" . | nindent 4 }}
+  annotations:
+    argocd.argoproj.io/hook: Sync
+    argocd.argoproj.io/hook-delete-policy: BeforeHookCreation
+    argocd.argoproj.io/sync-wave: "2"
+spec:
+  backoffLimit: 6
+  activeDeadlineSeconds: 600
+  template:
+    spec:
+      serviceAccountName: hide-sample-templates
+      restartPolicy: OnFailure
+      containers:
+        - name: hide
+          image: {{ .Values.jobImage | quote }}
+          env:
+            - name: TEMPLATES
+              value: {{ join " " $hidden | quote }}
+            - name: TEMPLATE_NAMESPACE
+              value: {{ .Values.databaseTemplates.namespace | quote }}
+          command: ["/bin/bash", "-c"]
+          args:
+            - |
+              set -euo pipefail
+              for i in $(seq 1 60); do
+                skipped=" $(oc get configs.samples.operator.openshift.io cluster -o jsonpath='{.spec.skippedTemplates[*]}') "
+                missing=""
+                for t in $TEMPLATES; do [[ "$skipped" == *" $t "* ]] || missing="$missing $t"; done
+                [ -z "$missing" ] && break
+                echo "Waiting for skippedTemplates to contain:$missing"
+                sleep 5
+              done
+              [ -z "$missing" ] || { echo "skippedTemplates not set for:$missing" >&2; exit 1; }
+              for t in $TEMPLATES; do
+                oc delete template "$t" -n "$TEMPLATE_NAMESPACE" --ignore-not-found
+              done
+              echo "Sample templates hidden: $TEMPLATES"
+          resources:
+            requests:
+              cpu: 10m
+              memory: 32Mi
+            limits:
+              memory: 128Mi
+{{- end }}

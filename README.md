@@ -256,6 +256,21 @@ How it works: the lab guide image contains three builds of the site (see `build-
 content repository), and the lab guide Deployment's `WORKSHOP_PART` environment variable, set
 from `guidePart`, selects the one httpd serves.
 
+## Cluster-Wide Changes
+
+Besides the operators and namespaces, the workshop changes these cluster-wide settings (all undone
+by `cleanup.sh`):
+
+- User workload monitoring (`cluster-monitoring-config` in `openshift-monitoring`).
+- Templates `coolstore-mariadb` and `coolstore-postgresql` and the `java:openjdk-21-ubi9` image
+  stream tag in `openshift`.
+- OpenShift's sample database templates `mariadb-ephemeral`, `mariadb-persistent`,
+  `postgresql-ephemeral` and `postgresql-persistent` are hidden (Samples operator
+  `skippedTemplates`), so participants cannot pick them instead of the Coolstore templates
+  (KNOWN-ISSUES K20). Keep them with `databaseTemplates.hideSampleTemplates: false` in
+  `charts/workshop-platform/values.yaml`.
+- The Service Mesh and Pipelines console plugins.
+
 ## Resources Per User
 
 | Namespace | Contents | Participant role |

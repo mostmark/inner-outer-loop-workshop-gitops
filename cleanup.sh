@@ -40,6 +40,8 @@ while [[ $# -gt 0 ]]; do
 done
 
 log() { echo "[$(date +%H:%M:%S)] $*"; }
+# Sample templates the platform chart hides (databaseTemplates.hiddenSampleTemplates).
+SAMPLE_TEMPLATES="mariadb-ephemeral mariadb-persistent postgresql-ephemeral postgresql-persistent"
 
 command -v oc >/dev/null 2>&1 || { echo "Error: 'oc' CLI not found." >&2; exit 1; }
 oc whoami >/dev/null 2>&1 || { echo "Error: not logged in to OpenShift." >&2; exit 1; }
@@ -174,6 +176,14 @@ for plugin in pipelines-console-plugin ossmconsole; do
   [[ -n "$idx" ]] && oc patch consoles.operator.openshift.io cluster --type json \
     -p "[{\"op\":\"remove\",\"path\":\"/spec/plugins/$((idx - 1))\"}]" >/dev/null && log "Disabled console plugin $plugin"
 done
+# OpenShift's sample database templates, hidden by the platform chart: hand them back to the
+# Samples operator, which recreates them.
+for tmpl in $SAMPLE_TEMPLATES; do
+  idx=$(oc get configs.samples.operator.openshift.io cluster -o jsonpath='{.spec.skippedTemplates}' 2>/dev/null \
+    | tr -d '[]"' | tr ',' '\n' | grep -n -x "$tmpl" | cut -d: -f1 || true)
+  [[ -n "$idx" ]] && oc patch configs.samples.operator.openshift.io cluster --type json \
+    -p "[{\"op\":\"remove\",\"path\":\"/spec/skippedTemplates/$((idx - 1))\"}]" >/dev/null && log "Sample template $tmpl managed by the Samples operator again"
+done
 # ConsolePlugins, SCC, webhooks and cluster RBAC the Pipelines, DevWorkspace, Gitea and Service
 # Mesh operators created at run time (not part of their CSVs, so OLM does not remove them).
 oc delete consoleplugin pipelines-console-plugin ossmconsole --ignore-not-found
@@ -251,6 +261,8 @@ leftovers() {
   oc get scc pipelines-scc --no-headers -o name 2>/dev/null
   oc get configmap cluster-monitoring-config -n openshift-monitoring --no-headers -o name 2>/dev/null
   oc get template coolstore-mariadb coolstore-postgresql -n openshift --no-headers -o name 2>/dev/null
+  oc get configs.samples.operator.openshift.io cluster -o jsonpath='{.spec.skippedTemplates}' 2>/dev/null \
+    | tr -d '[]"' | tr ',' '\n' | grep -x -E "$(echo $SAMPLE_TEMPLATES | tr ' ' '|')" | sed 's/^/samples skippedTemplates /'
   oc get istag java:openjdk-21-ubi9 -n openshift --no-headers -o name 2>/dev/null
   if [[ "$KEEP_GITOPS" != "true" ]]; then
     oc get namespace "$GITOPS_NAMESPACE" openshift-gitops-operator --no-headers -o name 2>/dev/null

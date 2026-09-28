@@ -117,3 +117,13 @@ databaseTemplates:
   postgresql:
     name: coolstore-postgresql
     version: 15-el9
+  # Hide OpenShift's sample database templates, which look alike in the Software Catalog but
+  # create DeploymentConfigs with EOL versions (MariaDB 10.3 breaks the inventory service,
+  # KNOWN-ISSUES K20). Cluster-wide: the Samples operator stops managing them and a Job deletes
+  # them; cleanup.sh restores them.
+  hideSampleTemplates: true
+  hiddenSampleTemplates:
+    - mariadb-ephemeral
+    - mariadb-persistent
+    - postgresql-ephemeral
+    - postgresql-persistent

@@ -265,3 +265,14 @@ Argo CD, so it provides them itself: the user-setup Job reads `status.cheURL` an
 same mechanism as `workshop-env`). The values are read at run time rather than set in the chart,
 because the charts do not know the cluster's apps domain and the Dev Spaces host name may be
 customized. Adding the variables to the editor template was rejected for the same reason.
+
+## D22. Hiding OpenShift's sample database templates
+
+Participants picked OpenShift's "MariaDB (Ephemeral)" instead of the workshop's "Coolstore MariaDB
+(Ephemeral)" by mistake; the sample's MariaDB 10.3 makes the inventory service fail (KNOWN-ISSUES
+K20). Clearer wording in the guide cannot prevent a wrong click, so the platform chart removes the
+choice: the Samples operator is told to skip the four sample MariaDB/PostgreSQL templates and a Job
+deletes them. It is a cluster-wide change, acceptable for a dedicated workshop cluster and
+reversible (switch in the chart; `cleanup.sh` restores them). Argo CD applies only the
+`skippedTemplates` field of the operator-owned `Config` (server-side apply) and never deletes the
+object. As a second line of defence the guide and the cleanup work with either template.
