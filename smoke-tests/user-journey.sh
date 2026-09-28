@@ -126,7 +126,7 @@ reset_user() {
   step "Remove the user's Argo CD repositories" ws '. .tasks/workshop-env.sh && argocd_env &&
     for r in $(workshop_argocd repo list -o url 2>/dev/null); do workshop_argocd repo rm "$r" >/dev/null 2>&1 || true; done'
   no_coolstore() {
-    [[ -z "$(oc get deployment,buildconfig,route,pipeline,pipelinerun,pvc -n "$1" -o name 2>/dev/null)" ]]
+    [[ -z "$(oc get deployment,deploymentconfigs.apps.openshift.io,buildconfig,route,pipeline,pipelinerun,pvc -n "$1" -o name 2>/dev/null)" ]]
   }
   step "No Coolstore resources left in ${DEV}" wait_for 300 no_coolstore "$DEV"
   step "No Coolstore resources left in ${STAGING}" wait_for 300 no_coolstore "$STAGING"
