@@ -13,7 +13,7 @@ jobImage: image-registry.openshift-image-registry.svc:5000/openshift/cli:latest
 waitTimeoutSeconds: 1500
 
 # Every channel is pinned explicitly and was verified against the OpenShift 4.22 catalog
-# (`oc get packagemanifest <package> -o yaml`). See migration/DECISIONS.md.
+# (`oc get packagemanifest <package> -o yaml`). See docs/decisions.md.
 subscriptions:
   devspaces:
     enabled: true

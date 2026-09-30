@@ -2,8 +2,8 @@
 
 Installs the Inner & Outer Loop workshop on an OpenShift cluster: operators, shared platform,
 per-user resources and the lab guide, as an app-of-apps in the admin-only `openshift-gitops`
-Argo CD instance. `README.md` is the user documentation; `migration/` records how the workshop was
-migrated (sources, decisions, known issues, test report).
+Argo CD instance. `README.md` is the user documentation; `docs/` holds the known issues, the design decisions and
+the origin of the content.
 
 Related repositories (all use only the `main` branch):
 
@@ -26,7 +26,7 @@ Related repositories (all use only the `main` branch):
 | `cleanup.sh` | removes the workshop and every cluster-wide change, then verifies the end state |
 | `print-user-urls.sh`, `set-guide-part.sh`, `lib/credentials.sh` | participant URLs, lab guide part, user passwords |
 | `smoke-tests/` | `platform-check.sh`, `isolation-check.sh`, `user-journey.sh`, `footprint.sh` |
-| `migration/` | `MIGRATION.md`, `DECISIONS.md`, `KNOWN-ISSUES.md`, `PROGRESS.md`, `FINAL-REPORT.md`, inventory |
+| `docs/` | `known-issues.md` (workarounds, when to remove them), `decisions.md` (why things are built this way), `origin.md` (sources and migration record, attribution) |
 
 ## Rules
 
@@ -45,7 +45,7 @@ Related repositories (all use only the `main` branch):
 - Every cluster-wide change must be undone by `cleanup.sh` and covered by its end-state check.
 - Verify API versions, fields and operator channels on a cluster (`oc explain`,
   `oc api-resources`, `oc get packagemanifest`) instead of assuming them.
-- Record decisions in `migration/DECISIONS.md` and workarounds in `migration/KNOWN-ISSUES.md`
+- Record decisions in `docs/decisions.md` and workarounds in `docs/known-issues.md`
   (with when to remove them), and keep `README.md` in step with behaviour changes.
 
 ## What you need
@@ -78,7 +78,7 @@ Related repositories (all use only the `main` branch):
 | Value | Default | Purpose |
 |---|---|---|
 | `guidePart` (root) | `all` | lab guide shows `all`, `inner` (Part 1) or `outer` (Part 2); `set-guide-part.sh` |
-| `workshopUsers.kialiEditWorkaround` | `true` | Role that lets participants edit Istio config in Kiali 2.27 (KNOWN-ISSUES K19); remove with Kiali 2.28+ |
+| `workshopUsers.kialiEditWorkaround` | `true` | Role that lets participants edit Istio config in Kiali 2.27 (docs/known-issues.md K19); remove with Kiali 2.28+ |
 | `databaseTemplates.hideSampleTemplates` (platform) | `true` | hides OpenShift's sample MariaDB/PostgreSQL templates (K20) |
 | `devspaces.prestartWorkspaces` (users) | `true` | starts each participant's workspace |
 
@@ -109,13 +109,13 @@ values in step:
 |---|---|---|
 | OpenShift GitOps channel | `bootstrap.sh` (`GITOPS_CHANNEL`) | the `argocd` CLI in the code repo's tooling image (`ARGOCD_VERSION`) |
 | Dev Spaces, Pipelines, Service Mesh channels | `charts/workshop-operators/values.yaml` | Pipelines: `TKN_VERSION` in the tooling image |
-| Kiali: channel + `startingCSV` (manual approval, a Job approves exactly that CSV) | `charts/workshop-operators/values.yaml` | `workshopUsers.kialiEditWorkaround` can go with Kiali 2.28+ (KNOWN-ISSUES K19) |
+| Kiali: channel + `startingCSV` (manual approval, a Job approves exactly that CSV) | `charts/workshop-operators/values.yaml` | `workshopUsers.kialiEditWorkaround` can go with Kiali 2.28+ (docs/known-issues.md K19) |
 | Gitea operator: pinned catalog image tag | `charts/workshop-operators/values.yaml` (`catalogSources`) | - |
 | Dev Spaces editor image digests | `charts/workshop-users/values.yaml` (`devspaces.editor`) | copy them from the `che-code.yaml` entry of ConfigMap `editors-definitions` in `openshift-devspaces` after every Dev Spaces minor upgrade |
 | Istio version, Nexus image, Java builder tag, database versions | `charts/workshop-platform/values.yaml` | Java builder tag: the code repo's `s2i-java` `VERSION`; MariaDB version: the inventory service's `db-version` in the lab guide and the code repo |
 | Product versions shown in the lab guide | the lab guide's `content/antora.yml` | - |
 
-Record version changes and anything they break in `migration/KNOWN-ISSUES.md`.
+Record version changes and anything they break in `docs/known-issues.md`.
 
 ## Customising in a fork
 

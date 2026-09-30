@@ -53,12 +53,12 @@ workspaces are running 2 to 3 minutes later.
 │   └── lab-guide/                # lab guide deployment and URL template
 ├── bootstrap.sh                  # the only imperative step
 ├── cleanup.sh                    # removes the workshop
+├── docs/                         # known issues, design decisions, origin of the content
 ├── images/                       # images used in this README
 ├── lib/credentials.sh            # user passwords (shared or per user), used by the scripts
 ├── print-user-urls.sh            # prints each participant's lab guide URL
 ├── set-guide-part.sh             # shows Part 1, Part 2 or both in the lab guide
-├── smoke-tests/                  # platform-check.sh, user-journey.sh, isolation-check.sh
-└── migration/                    # migration record, decisions, inventory, known issues, report
+└── smoke-tests/                  # platform-check.sh, user-journey.sh, isolation-check.sh
 ```
 
 ## Architecture
@@ -293,7 +293,7 @@ by `cleanup.sh`):
 - OpenShift's sample database templates `mariadb-ephemeral`, `mariadb-persistent`,
   `postgresql-ephemeral` and `postgresql-persistent` are hidden (Samples operator
   `skippedTemplates`), so participants cannot pick them instead of the Coolstore templates
-  (KNOWN-ISSUES K20). Keep them with `databaseTemplates.hideSampleTemplates: false` in
+  (known issue K20 in [docs/known-issues.md](docs/known-issues.md)). Keep them with `databaseTemplates.hideSampleTemplates: false` in
   `charts/workshop-platform/values.yaml`.
 - The Service Mesh and Pipelines console plugins.
 
@@ -306,7 +306,7 @@ by `cleanup.sh`):
 | `devspaces-<user>` | DevWorkspace `wksp-end-to-end-dev` (started by default), VS Code editor template, ConfigMaps `workshop-env` and `workshop-devspaces-env` (Dev Spaces URLs, written by the user-setup Job), Secrets `workshop-credentials` and `workshop-git-credentials` | `admin` |
 
 Also per user: Role `kiali-edit-workaround` in `cn-project-<user>` (lets participants edit Istio
-config in Kiali 2.27, KNOWN-ISSUES K19), Argo CD AppProject `cn-project-<user>` (namespace `argocd`) and RBAC role, an
+config in Kiali 2.27, known issue K19 in [docs/known-issues.md](docs/known-issues.md)), Argo CD AppProject `cn-project-<user>` (namespace `argocd`) and RBAC role, an
 Argo CD local account with the `apiKey` capability only, and a Gitea account with the workshop
 password (the shared one or the user's own).
 
@@ -316,7 +316,7 @@ to `false` in `charts/workshop/values.yaml`.
 ## Sizing
 
 Measured on the test cluster (OpenShift 4.22.14, one node with 32 vCPU / 128 GiB) with
-`smoke-tests/footprint.sh`; raw numbers in `migration/FINAL-REPORT.md`.
+`smoke-tests/footprint.sh`.
 
 | Scope | Requested (CPU / memory) | Used, idle | Used, Part 1 and Part 2 deployed |
 |---|---|---|---|
@@ -423,7 +423,7 @@ helm lint charts/workshop-users --set 'users.explicitNames={alice,bob}'
 | A child Application stays `Progressing` | Open it in the `openshift-gitops` Argo CD UI. The readiness Jobs in `workshop-setup` (`wait-for-operators`, `wait-for-platform`) and `user-setup` log what they wait for: `oc logs job/<name> -n workshop-setup`. |
 | In the `openshift-gitops` Argo CD console ("LOG IN VIA OPENSHIFT") you see no Applications, although you are cluster-admin | This Argo CD instance grants admin rights only to members of the OpenShift groups `cluster-admins` and `system:cluster-admins`; the cluster-admin *role* does not count. Add your user to the group, then log out and in again: `oc adm groups new cluster-admins <user>` (or `oc adm groups add-users cluster-admins <user>` if the group exists). Without the console: `oc get applications -n openshift-gitops -w`. |
 | Kiali operator does not install | Its InstallPlan needs approval; the `approve-kiali-ossm` Job in `workshop-setup` does that for the pinned CSV only. Check its log. |
-| Terminal > New Terminal in the workspace opens an empty terminal (only a cursor, no prompt) | The workspace lacks `CHE_DASHBOARD_URL` (KNOWN-ISSUES K18). Check `oc get configmap workshop-devspaces-env -n devspaces-<user>` and the user-setup Job log, then restart the workspace. `platform-check.sh` checks both. |
+| Terminal > New Terminal in the workspace opens an empty terminal (only a cursor, no prompt) | The workspace lacks `CHE_DASHBOARD_URL` (known issue K18 in [docs/known-issues.md](docs/known-issues.md)). Check `oc get configmap workshop-devspaces-env -n devspaces-<user>` and the user-setup Job log, then restart the workspace. `platform-check.sh` checks both. |
 | A workspace is `Failed` | `oc get dw -n devspaces-<user>`. Stop and start it from the Dev Spaces dashboard, or `oc patch dw wksp-end-to-end-dev -n devspaces-<user> --type merge -p '{"spec":{"started":true}}'` after fixing the cause. |
 | Kiali graph is empty | User workload monitoring must be running (`oc get pods -n openshift-user-workload-monitoring`), and metrics lag 1 to 2 minutes (30 s scrape interval). |
 | `oc login -u` fails for participants | The identity provider must accept the password for the CLI; check the users' passwords in the IdP match `WORKSHOP_USER_PASSWORD` or the credentials file (see [User Passwords](#user-passwords)). |
@@ -432,4 +432,4 @@ helm lint charts/workshop-users --set 'users.explicitNames={alice,bob}'
 | The lab guide still shows the old part after `set-guide-part.sh` | Check `oc get deployment lab-guide -n lab-guide -o yaml` for `WORKSHOP_PART`, and whether the root Application is Synced. Browsers may show a cached page; reload it. |
 | `cleanup.sh` waits for namespaces | A finalizer is stuck; `oc get <kind> -n <namespace>` for the objects listed. Operators must still be running while their objects are deleted, which is why the operator namespaces are kept until the end. |
 
-More: `migration/KNOWN-ISSUES.md`.
+More: [docs/known-issues.md](docs/known-issues.md).

@@ -12,7 +12,7 @@ All branches named in the brief (`workshop-operator` 2.13, `end-to-end-developer
 `inner-loop-guide` 6.9, `outer-loop-guide` 6.11) are the newest version branches of their
 repositories (`git ls-remote --heads` on 2026-09-23); none is newer. Non-version branches
 (`rhds`, `completed`, `demo-mode`, `gh-pages`, dependabot branches) were ignored. The tooling image
-source `workshop-tools` (MIGRATION.md, section 1; the version the old devfile used) was
+source `workshop-tools` (origin.md, section 1; the version the old devfile used) was
 cloned as an additional read-only source because the image had to be rebuilt (D14).
 
 ## D2. App-of-apps split
@@ -176,7 +176,7 @@ so the URL template keeps the reference's four parameters.
 The old `workshop-tools:6.9` image still starts on Dev Spaces 3.30, but it ships
 `oc` 4.15, `argocd` 2.7 (the server is Argo CD 3.4), yq 2.4 and Maven 3.8, lives in the old
 organisation, and has no build pipeline. It is rebuilt from its Dockerfile (source:
-see MIGRATION.md, section 1) on UBI 9 with current tools and published as
+see origin.md, section 1) on UBI 9 with current tools and published as
 `quay.io/mostmark/workshop-tools:latest`; the Containerfile lives in the code repository.
 
 ## D15. Supplemental UI wiring of the lab guide
@@ -218,7 +218,7 @@ and CSVs, run-time objects (ConsolePlugins, the pipelines SCC, webhooks, Cluster
 finally OpenShift GitOps (default instance disabled first, because the operator re-creates it).
 The script verifies the end state and fails if anything is left. Found and fixed on the test
 cluster over three cleanup runs; the final version cleaned a complete installation with
-participant content in one pass (FINAL-REPORT section 4).
+participant content in one pass.
 
 ## D19. Showing one part of the lab guide (two-day events)
 
@@ -258,7 +258,7 @@ exported in the instructor's shell would otherwise override per-user passwords.
 
 The Dev Spaces dashboard adds `CHE_DASHBOARD_URL`, `CHE_PLUGIN_REGISTRY_URL` and
 `CHE_PLUGIN_REGISTRY_INTERNAL_URL` to the workspaces it creates; the editor needs at least the
-first one to open terminals (KNOWN-ISSUES K18). The workshop pre-creates its workspaces with
+first one to open terminals (known-issues.md K18). The workshop pre-creates its workspaces with
 Argo CD, so it provides them itself: the user-setup Job reads `status.cheURL` and
 `status.pluginRegistryURL` from the CheCluster and writes a per-user ConfigMap
 `workshop-devspaces-env`, mounted as environment variables into every workspace container (the
@@ -269,7 +269,7 @@ customized. Adding the variables to the editor template was rejected for the sam
 ## D22. Hiding OpenShift's sample database templates
 
 Participants picked OpenShift's "MariaDB (Ephemeral)" instead of the workshop's "Coolstore MariaDB
-(Ephemeral)" by mistake; the sample's MariaDB 10.3 makes the inventory service fail (KNOWN-ISSUES
+(Ephemeral)" by mistake; the sample's MariaDB 10.3 makes the inventory service fail (known-issues.md
 K20). Clearer wording in the guide cannot prevent a wrong click, so the platform chart removes the
 choice: the Samples operator is told to skip the four sample MariaDB/PostgreSQL templates and a Job
 deletes them. It is a cluster-wide change, acceptable for a dedicated workshop cluster and

@@ -58,7 +58,7 @@ check "Pipelines console plugin enabled" bash -c \
   "oc get consoles.operator.openshift.io cluster -o jsonpath='{.spec.plugins}' | grep -q pipelines-console-plugin"
 check "Java 21 builder tag openshift/java:openjdk-21-ubi9" bash -c "oc get istag java:openjdk-21-ubi9 -n openshift >/dev/null"
 check "Database templates in openshift" bash -c "oc get template coolstore-mariadb coolstore-postgresql -n openshift >/dev/null"
-# OpenShift's look-alike sample database templates are hidden (KNOWN-ISSUES K20), unless the
+# OpenShift's look-alike sample database templates are hidden (docs/known-issues.md K20), unless the
 # platform chart's databaseTemplates.hideSampleTemplates is switched off.
 if [[ -n "$(oc get configs.samples.operator.openshift.io cluster -o jsonpath='{.spec.skippedTemplates}' 2>/dev/null)" ]] \
     || oc get job hide-sample-templates -n workshop-setup >/dev/null 2>&1; then
@@ -79,7 +79,7 @@ check "Nexus Maven group readable anonymously" in_cluster_http \
 
 section "Per-user resources"
 # Kiali before 2.28 checks edit permissions with the kind name ("VirtualService"); the users chart
-# adds a matching Role (KNOWN-ISSUES K19). Checked only while such a Kiali is installed.
+# adds a matching Role (docs/known-issues.md K19). Checked only while such a Kiali is installed.
 KIALI_VERSION=$(oc get kiali -n istio-system -o jsonpath='{.items[0].status.environment.operatorVersion}' 2>/dev/null)
 KIALI_NEEDS_WORKAROUND=false
 if [[ "$KIALI_VERSION" =~ ^v?2\.([0-9]+)\. ]] && (( BASH_REMATCH[1] < 28 )); then KIALI_NEEDS_WORKAROUND=true; fi
@@ -127,7 +127,7 @@ for user in $USERS; do
     "oc get configmap workshop-devspaces-env -n devspaces-$user -o jsonpath='{.data.CHE_DASHBOARD_URL}' | grep -q '^https://.*/dashboard/\$'"
   if [[ "$started" == "true" ]]; then
     check "$user: workspace wksp-end-to-end-dev Running" test "$phase" = "Running"
-    # Without CHE_DASHBOARD_URL the editor cannot open terminals (KNOWN-ISSUES K18).
+    # Without CHE_DASHBOARD_URL the editor cannot open terminals (docs/known-issues.md K18).
     check "$user: workspace container has CHE_DASHBOARD_URL" bash -c \
       "oc exec -n devspaces-$user \$(oc get pods -n devspaces-$user -l controller.devfile.io/devworkspace_name=wksp-end-to-end-dev -o name | head -1) -c workshop-tools -- printenv CHE_DASHBOARD_URL | grep -q /dashboard/"
   else

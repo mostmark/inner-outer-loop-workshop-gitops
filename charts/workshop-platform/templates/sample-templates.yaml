@@ -5,7 +5,7 @@
 # so that participants can only pick the workshop's Coolstore templates in the Software Catalog.
 # The samples create DeploymentConfigs with EOL versions (MariaDB 10.3, PostgreSQL 10); with
 # MariaDB 10.3 the inventory service fails at startup because it is built for db-version 10.5
-# (KNOWN-ISSUES K20). The Samples operator owns this object: Argo CD only sets skippedTemplates
+# (docs/known-issues.md K20). The Samples operator owns this object: Argo CD only sets skippedTemplates
 # (server-side apply) and never deletes it; cleanup.sh removes the entries again.
 apiVersion: samples.operator.openshift.io/v1
 kind: Config

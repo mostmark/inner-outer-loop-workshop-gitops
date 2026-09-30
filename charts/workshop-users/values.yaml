@@ -47,6 +47,6 @@ devspaces:
     runtimeImage: registry.redhat.io/devspaces/udi-rhel9@sha256:184f43b31b4bdc7ace01be27f6e57d5bb7cd9203226b5978f084ea0370f2d6f8
 
 # Lets participants edit Istio config in Kiali's YAML editor (and the console's Service Mesh menu)
-# despite a permission-check bug in Kiali 2.27 (KNOWN-ISSUES K19). Set to false once the installed
+# despite a permission-check bug in Kiali 2.27 (docs/known-issues.md K19). Set to false once the installed
 # Kiali is 2.28 or later.
 kialiEditWorkaround: true

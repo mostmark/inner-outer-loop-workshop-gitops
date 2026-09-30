@@ -42,7 +42,7 @@ subjects:
 # ("virtualservices"), so only roles with "*" pass and participants get a read-only editor in
 # Kiali and in the console's Service Mesh menu. These rules match that check and grant nothing
 # else: no API resource has these names. Kiali saves with the participant's own token, which the
-# edit role above allows. Fixed upstream in Kiali 2.28 (KNOWN-ISSUES K19).
+# edit role above allows. Fixed upstream in Kiali 2.28 (docs/known-issues.md K19).
 apiVersion: rbac.authorization.k8s.io/v1
 kind: Role
 metadata:

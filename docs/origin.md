@@ -1,10 +1,10 @@
-# Migration record
+# Origin and migration record
 
 The Red Hat "End-to-End Developer Workshop" (Inner Loop + Outer Loop) moved from the
 `workshop-operator` to OpenShift GitOps and Helm, with one Antora lab guide. This file records
 where everything came from, how the old components map to the new ones, how every guide page was
-migrated, and what changed and why. Decisions are in [DECISIONS.md](DECISIONS.md), the full
-component inventory in [COMPONENT-INVENTORY.md](COMPONENT-INVENTORY.md).
+migrated, and what changed and why. Decisions are in [decisions.md](decisions.md), open issues
+and workarounds in [known-issues.md](known-issues.md).
 
 ## 1. Sources
 
@@ -29,7 +29,7 @@ Targets (all only `main`):
 | Repository | Content |
 |---|---|
 | `github.com/mostmark/inner-outer-loop-workshop` | Antora lab guide, image `quay.io/mostmark/inner-outer-loop-lab:latest` |
-| `github.com/mostmark/inner-outer-loop-workshop-gitops` | Helm charts, root Application, `bootstrap.sh`, `cleanup.sh`, `print-user-urls.sh`, `smoke-tests/`, `migration/` |
+| `github.com/mostmark/inner-outer-loop-workshop-gitops` | Helm charts, root Application, `bootstrap.sh`, `cleanup.sh`, `print-user-urls.sh`, `smoke-tests/`, `docs/` |
 | `github.com/mostmark/inner-outer-loop-workshop-code` | Example code, devfile, `.tasks`, pipelines, tooling image `quay.io/mostmark/workshop-tools:latest` |
 
 ## 2. Old to new component mapping

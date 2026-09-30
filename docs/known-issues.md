@@ -1,7 +1,8 @@
 # Known issues
 
-Open issues and limitations of the migrated workshop, with workarounds. Items fixed during the
-migration are in [MIGRATION.md](MIGRATION.md) and [FINAL-REPORT.md](FINAL-REPORT.md).
+Open issues and limitations of the workshop, with workarounds and when they can be removed.
+Where the workshop comes from and what changed during its migration is in [origin.md](origin.md);
+the reasons behind design choices are in [decisions.md](decisions.md).
 
 ## Workshop content
 
