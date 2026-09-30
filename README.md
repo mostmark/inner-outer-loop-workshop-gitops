@@ -28,9 +28,12 @@ cd inner-outer-loop-workshop-gitops
 oc login <api-url>                                        # as cluster-admin
 
 export WORKSHOP_USER_PASSWORD='<password of the users>'   # shared password, or see below
-./bootstrap.sh --users 20                                 # about 10 minutes, waits until ready
+./bootstrap.sh --users 20                                 # install the workshop for 20 users
 ./print-user-urls.sh                                      # one lab guide link per participant
 ```
+
+`bootstrap.sh` takes about 10 minutes and waits until everything is ready; the participants'
+workspaces are running 2 to 3 minutes later.
 
 - Users with their own passwords: pass `--credentials-file users.csv` to `bootstrap.sh` instead of
   setting `WORKSHOP_USER_PASSWORD` ([User Passwords](#user-passwords)).
