@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Global Maven settings of the workshop tools image ($MAVEN_HOME/conf/settings.xml).
+
+  Every external repository (Maven Central, the Red Hat GA repository, plugin repositories) is
+  resolved through a single mirror, read from the MAVEN_MIRROR_URL environment variable. The image
+  defaults to Maven Central; the workshop devfile and workspace environment set it to the in-cluster
+  Nexus (http://nexus.nexus.svc:8081/repository/maven-all-public/).
+
+  This file replaces the distribution's default settings.xml, which also contains the
+  "maven-default-http-blocker" mirror. That blocker would reject the plain-HTTP in-cluster Nexus.
+-->
+<settings xmlns="http://maven.apache.org/SETTINGS/1.2.0"
+          xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+          xsi:schemaLocation="http://maven.apache.org/SETTINGS/1.2.0 https://maven.apache.org/xsd/settings-1.2.0.xsd">
+  <mirrors>
+    <mirror>
+      <id>workshop-mirror</id>
+      <name>Workshop Maven mirror (MAVEN_MIRROR_URL)</name>
+      <url>${env.MAVEN_MIRROR_URL}</url>
+      <mirrorOf>external:*</mirrorOf>
+    </mirror>
+  </mirrors>
+</settings>

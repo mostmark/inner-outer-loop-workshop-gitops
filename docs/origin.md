@@ -29,8 +29,8 @@ Targets (all only `main`):
 | Repository | Content |
 |---|---|
 | `github.com/mostmark/inner-outer-loop-workshop` | Antora lab guide, image `quay.io/mostmark/inner-outer-loop-lab:latest` |
-| `github.com/mostmark/inner-outer-loop-workshop-gitops` | Helm charts, root Application, `bootstrap.sh`, `cleanup.sh`, `print-user-urls.sh`, `smoke-tests/`, `docs/` |
-| `github.com/mostmark/inner-outer-loop-workshop-code` | Example code, devfile, `.tasks`, pipelines, tooling image `quay.io/mostmark/workshop-tools:latest` |
+| `github.com/mostmark/inner-outer-loop-workshop-gitops` | Helm charts, root Application, `bootstrap.sh`, `cleanup.sh`, `print-user-urls.sh`, `smoke-tests/`, `docs/`, `tools/` (tooling image `quay.io/mostmark/workshop-tools:latest`) |
+| `github.com/mostmark/inner-outer-loop-workshop-code` | What participants get in their workspace: example code, devfile, `.tasks`, pipelines |
 
 ## 2. Old to new component mapping
 
@@ -420,4 +420,4 @@ Target: `inner-outer-loop-workshop/content/modules/ROOT/pages/outer-loop-0*.adoc
   without the committed generated config (and with `bin/www`, which the old import missed because
   of a root `.gitignore` rule), gateway Dockerfile on .NET 9, Quarkus 3.27.5, catalog JKube creates a
   Deployment through `jkube.build.switchToDeployment`.
-- Tooling image rebuilt on UBI 9 (D14); source in `tools/`.
+- Tooling image rebuilt on UBI 9 (D14); source in the gitops repository's `tools/`.

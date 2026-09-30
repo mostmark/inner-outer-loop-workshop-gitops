@@ -58,7 +58,8 @@ workspaces are running 2 to 3 minutes later.
 ├── lib/credentials.sh            # user passwords (shared or per user), used by the scripts
 ├── print-user-urls.sh            # prints each participant's lab guide URL
 ├── set-guide-part.sh             # shows Part 1, Part 2 or both in the lab guide
-└── smoke-tests/                  # platform-check.sh, user-journey.sh, isolation-check.sh
+├── smoke-tests/                  # platform-check.sh, user-journey.sh, isolation-check.sh
+└── tools/                        # source of the participants' tooling image (workshop-tools)
 ```
 
 ## Architecture
@@ -312,6 +313,48 @@ password (the shared one or the user's own).
 
 To create the workspaces without starting them, set `workshopUsers.devspaces.prestartWorkspaces`
 to `false` in `charts/workshop/values.yaml`.
+
+## Participant Workspace and Tooling Image
+
+Each participant works in a pre-created DevWorkspace `wksp-end-to-end-dev` in `devspaces-<user>`.
+It uses the devfile of [inner-outer-loop-workshop-code](https://github.com/mostmark/inner-outer-loop-workshop-code)
+as its parent, clones that repository (branch `main`) to `/projects/workshop`, and runs the tooling
+container `quay.io/mostmark/workshop-tools:latest` (source in [`tools/`](tools)) with the VS Code
+editor merged into it. The devfile commands (Terminal > Run Task... > devfile) are the scripts in
+the code repository's `.tasks/`; the lab guide refers to them by their labels.
+
+The scripts read this per-user environment, which the users chart and the user-setup Job mount
+into every workspace container:
+
+| Variable | Source | Value |
+|---|---|---|
+| `WORKSHOP_USER` | ConfigMap `workshop-env` | OpenShift and Gitea user name |
+| `WORKSHOP_DEV_PROJECT` / `WORKSHOP_STAGING_PROJECT` | ConfigMap `workshop-env` | `my-project-<user>` / `cn-project-<user>` |
+| `WORKSHOP_GITEA_URL` | ConfigMap `workshop-env` | `http://gitea-server.gitea.svc:3000` |
+| `MAVEN_MIRROR_URL` | ConfigMap `workshop-env`, devfile | `http://nexus.nexus.svc:8081/repository/maven-all-public/` |
+| `ARGOCD_SERVER`, `ARGOCD_OPTS` | ConfigMap `workshop-env` | `argocd-server.argocd.svc`, `--plaintext` |
+| `GIT_AUTHOR_*`, `GIT_COMMITTER_*` | ConfigMap `workshop-env` | `<user>`, `<user>@example.com` |
+| `CHE_DASHBOARD_URL`, `CHE_PLUGIN_REGISTRY_URL`, `CHE_PLUGIN_REGISTRY_INTERNAL_URL` | ConfigMap `workshop-devspaces-env` | Dev Spaces URLs; the editor needs them to open terminals |
+| `WORKSHOP_PASSWORD`, `ARGOCD_AUTH_TOKEN` | Secret `workshop-credentials` | the participant's OpenShift password, Argo CD API token |
+| Git credentials for Gitea | Secret `workshop-git-credentials` | DevWorkspace git credential (no password in URLs) |
+
+Fast-forward and reset, for participants who skip parts or want to start over (run in a workspace
+terminal from `/projects/workshop`, or as the devfile command where one exists):
+
+| Command | Does |
+|---|---|
+| devfile **Inner Loop - Deploy Coolstore** (`.tasks/inner_loop_deploy_coolstore.sh`) | deploys the finished Part 1 into `my-project-<user>` (also the start of Part 2) |
+| `.tasks/outer_loop_deploy_coolstore.sh` | deploys the finished Part 2 into `cn-project-<user>`; needs the Part 1 state |
+| `.tasks/end_to_end_deploy_coolstore.sh` | both of the above |
+| devfile **OpenShift - Cleanup** (`.tasks/openshift_cleanup.sh`) | deletes the Coolstore resources in both projects and the participant's Argo CD Applications, and **discards the participant's local changes** in `/projects/workshop` (the projects are kept) |
+
+Instructors can follow the progress of all participants with
+`.tasks/workshop_delivery_status.sh [-v]` from the code repository (needs cluster-reader or
+cluster-admin).
+
+Changes to the code repository reach new workspaces automatically; existing workspaces need
+`git pull` in `/projects/workshop`. A new tooling image (`tools/build-push.sh`, see
+[tools/README.md](tools/README.md)) is used by workspaces started afterwards; restart running ones.
 
 ## Sizing
 

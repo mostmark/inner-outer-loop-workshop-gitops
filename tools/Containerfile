@@ -1,0 +1,98 @@
+# Workshop tools image for the Inner & Outer Loop workshop (Dev Spaces tooling container).
+#
+# Image: quay.io/mostmark/workshop-tools:latest (x86_64 only; build with ./build-push.sh)
+# Used by: devfile.yaml (component workshop-tools) of github.com/mostmark/inner-outer-loop-workshop-code.
+
+FROM registry.access.redhat.com/ubi9/ubi-minimal:latest
+
+ARG MAVEN_VERSION=3.9.16
+ARG OC_CHANNEL=stable-4.22
+ARG TKN_VERSION=0.46.1
+ARG ARGOCD_VERSION=v3.4.7
+ARG YQ_VERSION=v4.53.6
+
+LABEL name="workshop-tools" \
+      summary="Tooling container for the Inner Loop + Outer Loop workshop" \
+      description="Java 21, Maven 3.9, oc/kubectl, tkn, argocd, yq, git and jq for OpenShift Dev Spaces" \
+      io.k8s.display-name="Workshop tools" \
+      io.openshift.tags="workshop,devspaces,java,maven,oc,tkn,argocd" \
+      org.opencontainers.image.source="https://github.com/mostmark/inner-outer-loop-workshop-gitops"
+
+ENV HOME=/home/developer \
+    JAVA_HOME=/usr/lib/jvm/java-21-openjdk \
+    MAVEN_HOME=/usr/lib/mvn \
+    MAVEN_MIRROR_URL=https://repo1.maven.org/maven2 \
+    JAVA_TOOL_OPTIONS="-Djava.net.preferIPv4Stack=true"
+ENV PATH=${MAVEN_HOME}/bin:${PATH}
+
+# OS packages. curl comes from the base image (curl-minimal). openssl lets the VS Code editor
+# (che-code) pick its OpenSSL 3 (UBI 9) runtime.
+RUN microdnf install -y --nodocs --setopt=install_weak_deps=0 \
+        java-21-openjdk-devel \
+        git \
+        jq \
+        procps-ng \
+        tar \
+        gzip \
+        which \
+        findutils \
+        diffutils \
+        less \
+        openssl && \
+    microdnf clean all && rm -rf /var/cache/yum /var/cache/dnf && \
+    java -version && git --version && jq --version
+
+# oc and kubectl (OpenShift 4.22 client)
+RUN curl -fsSL "https://mirror.openshift.com/pub/openshift-v4/clients/ocp/${OC_CHANNEL}/openshift-client-linux.tar.gz" \
+        | tar -xz --no-same-owner -C /usr/local/bin oc kubectl && \
+    chmod 0755 /usr/local/bin/oc /usr/local/bin/kubectl && \
+    oc version --client && kubectl version --client
+
+# tkn (Tekton CLI)
+RUN cd /tmp && \
+    curl -fsSLO "https://github.com/tektoncd/cli/releases/download/v${TKN_VERSION}/tkn_${TKN_VERSION}_Linux_x86_64.tar.gz" && \
+    curl -fsSL "https://github.com/tektoncd/cli/releases/download/v${TKN_VERSION}/checksums.txt" \
+        | grep " tkn_${TKN_VERSION}_Linux_x86_64.tar.gz$" | sha256sum -c - && \
+    tar -xzf "tkn_${TKN_VERSION}_Linux_x86_64.tar.gz" --no-same-owner -C /usr/local/bin tkn && \
+    rm -f /tmp/tkn_* && \
+    tkn version
+
+# argocd CLI (matches the Argo CD 3.4 server of the participant instance)
+RUN curl -fsSL -o /usr/local/bin/argocd \
+        "https://github.com/argoproj/argo-cd/releases/download/${ARGOCD_VERSION}/argocd-linux-amd64" && \
+    chmod 0755 /usr/local/bin/argocd && \
+    argocd version --client --short
+
+# yq v4 (mikefarah)
+RUN curl -fsSL -o /usr/local/bin/yq \
+        "https://github.com/mikefarah/yq/releases/download/${YQ_VERSION}/yq_linux_amd64" && \
+    chmod 0755 /usr/local/bin/yq && \
+    yq --version
+
+# Maven 3.9 with the workshop's global settings.xml (mirror = ${env.MAVEN_MIRROR_URL})
+RUN cd /tmp && \
+    curl -fsSLO "https://archive.apache.org/dist/maven/maven-3/${MAVEN_VERSION}/binaries/apache-maven-${MAVEN_VERSION}-bin.tar.gz" && \
+    echo "$(curl -fsSL https://archive.apache.org/dist/maven/maven-3/${MAVEN_VERSION}/binaries/apache-maven-${MAVEN_VERSION}-bin.tar.gz.sha512 | cut -d' ' -f1)  apache-maven-${MAVEN_VERSION}-bin.tar.gz" \
+        | sha512sum -c - && \
+    tar -xzf "apache-maven-${MAVEN_VERSION}-bin.tar.gz" --no-same-owner && \
+    mv "apache-maven-${MAVEN_VERSION}" "${MAVEN_HOME}" && \
+    rm -f "apache-maven-${MAVEN_VERSION}-bin.tar.gz"
+COPY etc/settings.xml ${MAVEN_HOME}/conf/settings.xml
+RUN mvn --version
+
+# Home directory, entrypoint scripts and defaults
+RUN mkdir -p /projects ${HOME}/.m2
+COPY etc/entrypoint.sh etc/before-start.sh ${HOME}/
+COPY etc/.bashrc ${HOME}/.bashrc
+COPY etc/gitconfig ${HOME}/.gitconfig
+
+# Arbitrary UID support: OpenShift runs the container with a random UID in group 0.
+RUN chmod 0755 ${HOME}/entrypoint.sh ${HOME}/before-start.sh && \
+    for f in "${HOME}" "/projects" "/etc/passwd"; do \
+      echo "Changing permissions on ${f}" && chgrp -R 0 "${f}" && chmod -R g+rwX "${f}"; \
+    done
+
+USER 1001
+WORKDIR /projects
+ENTRYPOINT [ "/home/developer/entrypoint.sh" ]
+CMD [ "tail", "-f", "/dev/null" ]

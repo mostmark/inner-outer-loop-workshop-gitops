@@ -177,7 +177,8 @@ The old `workshop-tools:6.9` image still starts on Dev Spaces 3.30, but it ships
 `oc` 4.15, `argocd` 2.7 (the server is Argo CD 3.4), yq 2.4 and Maven 3.8, lives in the old
 organisation, and has no build pipeline. It is rebuilt from its Dockerfile (source:
 see origin.md, section 1) on UBI 9 with current tools and published as
-`quay.io/mostmark/workshop-tools:latest`; the Containerfile lives in the code repository.
+`quay.io/mostmark/workshop-tools:latest`; the Containerfile lives in this repository's `tools/`
+(not in the code repository, which participants clone into their workspaces).
 
 ## D15. Supplemental UI wiring of the lab guide
 

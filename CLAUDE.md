@@ -9,8 +9,9 @@ Related repositories (all use only the `main` branch):
 
 - `github.com/mostmark/inner-outer-loop-workshop`: the lab guide (image
   `quay.io/mostmark/inner-outer-loop-lab:latest`).
-- `github.com/mostmark/inner-outer-loop-workshop-code`: code, devfile, task scripts, pipelines and
-  the tooling image `quay.io/mostmark/workshop-tools:latest`.
+- `github.com/mostmark/inner-outer-loop-workshop-code`: what participants get in their workspace
+  (code, devfile, task scripts, pipelines). It has no `CLAUDE.md` of its own; its rules are in
+  "Working on the code repository" below.
 
 ## Layout
 
@@ -26,6 +27,7 @@ Related repositories (all use only the `main` branch):
 | `cleanup.sh` | removes the workshop and every cluster-wide change, then verifies the end state |
 | `print-user-urls.sh`, `set-guide-part.sh`, `lib/credentials.sh` | participant URLs, lab guide part, user passwords |
 | `smoke-tests/` | `platform-check.sh`, `isolation-check.sh`, `user-journey.sh`, `footprint.sh` |
+| `tools/` | source of the participants' tooling image `quay.io/mostmark/workshop-tools:latest` (`Containerfile`, `build-push.sh`, `etc/` with `.bashrc`, Maven settings, entrypoint) |
 | `docs/` | `known-issues.md` (workarounds, when to remove them), `decisions.md` (why things are built this way), `origin.md` (sources and migration record, attribution) |
 
 ## Rules
@@ -63,6 +65,7 @@ Related repositories (all use only the `main` branch):
 | push to `main` | every cluster whose root Application follows this repository: Argo CD syncs it (refresh the Application to speed it up) |
 | `bootstrap.sh` | the GitOps operator, the secrets (user passwords) and the root Application's parameters |
 | a changed Job (Sync hook) | runs again on the next sync of its Application |
+| `tools/build-push.sh` | workspaces started afterwards (the tooling image is pulled anew); restart running ones |
 | running workspaces | read their environment at start: they get changed values after a restart (the DevWorkspace operator restarts them itself when a mounted ConfigMap or Secret is added) |
 
 ## Checks before committing
@@ -107,27 +110,72 @@ values in step:
 
 | What | Where | Depends on it |
 |---|---|---|
-| OpenShift GitOps channel | `bootstrap.sh` (`GITOPS_CHANNEL`) | the `argocd` CLI in the code repo's tooling image (`ARGOCD_VERSION`) |
-| Dev Spaces, Pipelines, Service Mesh channels | `charts/workshop-operators/values.yaml` | Pipelines: `TKN_VERSION` in the tooling image |
+| OpenShift GitOps channel | `bootstrap.sh` (`GITOPS_CHANNEL`) | the `argocd` CLI in the tooling image (`ARGOCD_VERSION` in `tools/Containerfile`) |
+| Dev Spaces, Pipelines, Service Mesh channels | `charts/workshop-operators/values.yaml` | Pipelines: `TKN_VERSION` in `tools/Containerfile` |
 | Kiali: channel + `startingCSV` (manual approval, a Job approves exactly that CSV) | `charts/workshop-operators/values.yaml` | `workshopUsers.kialiEditWorkaround` can go with Kiali 2.28+ (docs/known-issues.md K19) |
 | Gitea operator: pinned catalog image tag | `charts/workshop-operators/values.yaml` (`catalogSources`) | - |
 | Dev Spaces editor image digests | `charts/workshop-users/values.yaml` (`devspaces.editor`) | copy them from the `che-code.yaml` entry of ConfigMap `editors-definitions` in `openshift-devspaces` after every Dev Spaces minor upgrade |
 | Istio version, Nexus image, Java builder tag, database versions | `charts/workshop-platform/values.yaml` | Java builder tag: the code repo's `s2i-java` `VERSION`; MariaDB version: the inventory service's `db-version` in the lab guide and the code repo |
 | Product versions shown in the lab guide | the lab guide's `content/antora.yml` | - |
+| Tools in the tooling image | `tools/Containerfile` (`ARG` lines) | `OC_CHANNEL` with OpenShift, `TKN_VERSION` with Pipelines, `ARGOCD_VERSION` with OpenShift GitOps; also `MAVEN_VERSION`, `YQ_VERSION` |
 
 Record version changes and anything they break in `docs/known-issues.md`.
 
 ## Customising in a fork
 
 These values point to the original repositories and images; change all of them together with the
-lists in the lab guide and code repositories' `CLAUDE.md`:
+list in the lab guide repository's `CLAUDE.md` and the code repository's list below:
 
 - `argocd/application.yaml`: `spec.source.repoURL` and the `source.repoURL` parameter.
 - `bootstrap.sh`: default `REPO_URL` (or pass `--repo`).
 - `charts/workshop/values.yaml`: `source.repoURL`.
 - `charts/lab-guide/values.yaml`: `labGuide.image`.
 - `charts/workshop-users/values.yaml`: `devspaces.devfileURL`, `devspaces.repositoryURL`.
+- `tools/build-push.sh` (run it with your `QUAY_USER`), the header and source label in
+  `tools/Containerfile`, and `tools/README.md`.
 - `README.md` and this file: repository and image names.
+
+## Working on the code repository
+
+`github.com/mostmark/inner-outer-loop-workshop-code` is cloned into every participant's workspace
+(`/projects/workshop`), so **everything in it is visible to participants**. Keep it to what they
+need, like the original workshop: `labs/`, `.tasks/`, `devfile.yaml`, `.gitignore` and a short
+participant `README.md` (overview only, no installation or maintainer details). Maintainer material
+(the tooling image, installation notes, these rules) belongs in this repository.
+
+| Path in the code repository | What |
+|---|---|
+| `devfile.yaml` | workspace definition (tooling container, endpoints, devfile commands) |
+| `.tasks/` | scripts behind the devfile commands; all source `.tasks/workshop-env.sh` (user and project names, `workshop_login`, `workshop_clean_project`, Gitea helpers) |
+| `.tasks/solutions/` | the finished state of the exercises that the "... - Deploy Coolstore" commands apply |
+| `labs/` | the services (`inventory-quarkus`, `catalog-spring-boot`, `gateway-dotnet`, `web-nodejs`, `catalog-go`) and `pipelines`; `labs/README.md` describes the application for participants |
+
+Rules:
+
+- **Devfile command labels must not change**: the lab guide tells participants to run them by name
+  (for example "OpenShift - Login", "Inner Loop - Deploy Coolstore"). Adding commands is fine.
+- Scripts get their values from the workspace environment (section "Names and contracts") and fall
+  back to names derived from the namespace (`${DEVWORKSPACE_NAMESPACE#devspaces-}`).
+- Never put passwords or tokens in files or Git URLs; the workspace gets them from the user-setup Job.
+- `workshop_clean_project` must remove everything a participant can create in a project, including
+  DeploymentConfigs and TemplateInstances from OpenShift's sample templates.
+- Solutions must match the lab guide (for example `%prod.quarkus.datasource.db-version=10.5`, which
+  matches the Coolstore MariaDB template).
+- Tekton: `tekton.dev/v1`; tasks via `resolver: cluster` from `openshift-pipelines` (`git-clone`,
+  `s2i-java` with `VERSION: openjdk-21-ubi9`, which must match `pipelines.javaBuilderTag` here,
+  `s2i-nodejs`, `s2i-dotnet`, `openshift-client`; param `CONTEXT`).
+- Service Mesh 3: `networking.istio.io/v1`; per-user gateway label `istio: ingressgateway-<user>`.
+- Default Git branch everywhere: `main` (`git init -b main`).
+- Framework versions are in each service's build file (for example `quarkus.platform.version` in
+  `labs/inventory-quarkus/pom.xml`); the lab guide shows some of these files, so check its text too.
+
+How changes reach participants: a push to `main` reaches workspaces created afterwards (they clone
+`main`); existing workspaces need `git pull` in `/projects/workshop`. Test with a participant's
+workspace and the devfile commands, or run `smoke-tests/user-journey.sh <user>` from here.
+
+In a fork, change in the code repository: `devfile.yaml` (the project's `origin` URL and the
+tooling image), the default `CODE_REPO_URL` in `.tasks/workshop-env.sh`, and the repository, bugs
+and homepage URLs in `labs/web-nodejs/package.json`.
 
 ## Git
 
