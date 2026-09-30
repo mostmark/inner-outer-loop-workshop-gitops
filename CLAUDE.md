@@ -1,0 +1,89 @@
+# Inner & Outer Loop Workshop: installation (OpenShift GitOps + Helm)
+
+Installs the Inner & Outer Loop workshop on an OpenShift cluster: operators, shared platform,
+per-user resources and the lab guide, as an app-of-apps in the admin-only `openshift-gitops`
+Argo CD instance. `README.md` is the user documentation; `migration/` records how the workshop was
+migrated (sources, decisions, known issues, test report).
+
+Related repositories (all use only the `main` branch):
+
+- `github.com/mostmark/inner-outer-loop-workshop`: the lab guide (image
+  `quay.io/mostmark/inner-outer-loop-lab:latest`).
+- `github.com/mostmark/inner-outer-loop-workshop-code`: code, devfile, task scripts, pipelines and
+  the tooling image `quay.io/mostmark/workshop-tools:latest`.
+
+## Layout
+
+| Path | What |
+|---|---|
+| `argocd/application.yaml` | root Application `inner-outer-loop-workshop` (source `main`) |
+| `charts/workshop/` | root chart: renders the child Applications (sync waves 0-2) |
+| `charts/workshop-operators/` | Subscriptions, OperatorGroups, CatalogSource, readiness Jobs |
+| `charts/workshop-platform/` | shared instances: Dev Spaces, Service Mesh + Kiali, participant Argo CD, Gitea, Nexus, Pipelines, database templates, monitoring |
+| `charts/workshop-users/` | per-user namespaces, RBAC, workspaces, and the user-setup Job (Gitea accounts, tokens, credentials) |
+| `charts/lab-guide/` | lab guide Deployment, Route, URL template |
+| `bootstrap.sh` | the only imperative step: GitOps operator, secrets, root Application |
+| `cleanup.sh` | removes the workshop and every cluster-wide change, then verifies the end state |
+| `print-user-urls.sh`, `set-guide-part.sh`, `lib/credentials.sh` | participant URLs, lab guide part, user passwords |
+| `smoke-tests/` | `platform-check.sh`, `isolation-check.sh`, `user-journey.sh`, `footprint.sh` |
+| `migration/` | `MIGRATION.md`, `DECISIONS.md`, `KNOWN-ISSUES.md`, `PROGRESS.md`, `FINAL-REPORT.md`, inventory |
+
+## Rules
+
+- **No secrets in Git.** User passwords, the Gitea admin password and tokens are created in the
+  cluster by `bootstrap.sh` or by Jobs. Never commit a password, a credentials file (`*.csv` is
+  ignored), a kubeconfig or a token.
+- **Charts are cluster-agnostic**: no apps domain, host names or IP addresses in values. Values that
+  depend on the cluster are read at run time (for example the Dev Spaces URLs from the CheCluster
+  status in the user-setup Job).
+- Least privilege for participants: no cluster-admin, no broad SCC grants; `anyuid` only with a
+  written reason. Participant roles are `admin` in `my-project-<user>` and `devspaces-<user>`,
+  `edit` in `cn-project-<user>`.
+- Objects owned by an operator or shared by the cluster are changed with server-side apply of the
+  needed fields only and marked `argocd.argoproj.io/sync-options: Delete=false` (see the Samples
+  operator `Config` in `charts/workshop-platform/templates/sample-templates.yaml`).
+- Every cluster-wide change must be undone by `cleanup.sh` and covered by its end-state check.
+- Verify API versions, fields and operator channels on a cluster (`oc explain`,
+  `oc api-resources`, `oc get packagemanifest`) instead of assuming them.
+- Record decisions in `migration/DECISIONS.md` and workarounds in `migration/KNOWN-ISSUES.md`
+  (with when to remove them), and keep `README.md` in step with behaviour changes.
+
+## Checks before committing
+
+- `helm lint` and `helm template` for every chart (and the root chart with its value variants).
+- `bash -n` for changed scripts.
+- On a test cluster: `./smoke-tests/platform-check.sh` (all checks pass), for bigger changes also
+  `isolation-check.sh` and `user-journey.sh <user>`. Argo CD on the cluster follows `main`, so a
+  push deploys the change there.
+
+## Switches in the charts
+
+| Value | Default | Purpose |
+|---|---|---|
+| `guidePart` (root) | `all` | lab guide shows `all`, `inner` (Part 1) or `outer` (Part 2); `set-guide-part.sh` |
+| `workshopUsers.kialiEditWorkaround` | `true` | Role that lets participants edit Istio config in Kiali 2.27 (KNOWN-ISSUES K19); remove with Kiali 2.28+ |
+| `databaseTemplates.hideSampleTemplates` (platform) | `true` | hides OpenShift's sample MariaDB/PostgreSQL templates (K20) |
+| `devspaces.prestartWorkspaces` (users) | `true` | starts each participant's workspace |
+
+## Names and contracts shared with the other repositories
+
+- Users come from `users.count` / `users.prefix` / `users.explicitNames`; per-user names use the
+  full user name: `my-project-<user>`, `cn-project-<user>`, `devspaces-<user>`, workspace
+  `wksp-end-to-end-dev`, Argo CD AppProject `cn-project-<user>` in namespace `argocd`.
+- Services: Gitea (`gitea`, `http://gitea-server.gitea.svc:3000`), Nexus Maven mirror (`nexus`,
+  `http://nexus.nexus.svc:8081/repository/maven-all-public/`), participant Argo CD (`argocd`, OpenShift
+  login), Kiali (`istio-system`), lab guide (`lab-guide`, route `doc`). `openshift-gitops` is
+  admin-only.
+- Workspace environment (ConfigMaps `workshop-env`, `workshop-devspaces-env` and Secret
+  `workshop-credentials`, mounted as environment variables): `WORKSHOP_USER`, `WORKSHOP_DEV_PROJECT`,
+  `WORKSHOP_STAGING_PROJECT`, `WORKSHOP_GITEA_URL`, `MAVEN_MIRROR_URL`, `ARGOCD_SERVER`, `ARGOCD_OPTS`,
+  `ARGOCD_AUTH_TOKEN`, `WORKSHOP_PASSWORD`, `GIT_*`, `CHE_DASHBOARD_URL` and the plugin registry URLs.
+- Pipelines authenticate to Argo CD with Secret `argocd-env-secret` (key `ARGOCD_AUTH_TOKEN`) in
+  `cn-project-<user>`.
+- Database templates `coolstore-mariadb` / `coolstore-postgresql` in `openshift` (Deployments,
+  MariaDB 10.5, PostgreSQL 15); the lab guide and the code repo's solutions depend on them.
+
+## Git
+
+- Only `main`; no version branches or tags; `targetRevision: main`, images tagged `latest`.
+- Commit messages without AI or Claude attribution.
