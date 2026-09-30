@@ -28,7 +28,7 @@ Targets (all only `main`):
 
 | Repository | Content |
 |---|---|
-| `github.com/mostmark/inner-outer-loop-workshop` | Antora lab guide, image `quay.io/mostmark/inner-outer-loop-lab:latest`, `SCREENSHOTS-TODO.md` |
+| `github.com/mostmark/inner-outer-loop-workshop` | Antora lab guide, image `quay.io/mostmark/inner-outer-loop-lab:latest` |
 | `github.com/mostmark/inner-outer-loop-workshop-gitops` | Helm charts, root Application, `bootstrap.sh`, `cleanup.sh`, `print-user-urls.sh`, `smoke-tests/`, `migration/` |
 | `github.com/mostmark/inner-outer-loop-workshop-code` | Example code, devfile, `.tasks`, pipelines, tooling image `quay.io/mostmark/workshop-tools:latest` |
 
@@ -79,8 +79,8 @@ segment) with two navigation sections, in the original page order:
 
 Images: all images of both guides were copied with their names (155 files: 73 + 96, of which 14 were identical duplicates); the Outer Loop's
 `openshift-add-from-git.png` (catalog v2 import) was renamed `openshift-add-from-git-catalog-go.png`
-because the Inner Loop has a different image with the same name. Recaptures:
-`SCREENSHOTS-TODO.md` in the content repository.
+because the Inner Loop has a different image with the same name. After the migration the owner
+recaptured all screenshots on OpenShift 4.22 (2026-09-30).
 
 ### 3.1 Part 1 details
 

@@ -55,8 +55,8 @@
 
 ## Next
 
-- Nothing open for the migration. Remaining manual work: screenshot recapture (SCREENSHOTS-TODO.md)
-  and an event-specific password (KNOWN-ISSUES K12, K17).
+- Nothing open for the migration. Remaining manual work: an event-specific password (KNOWN-ISSUES
+  K12, K17). The screenshots were recaptured by the owner on 2026-09-30 (K1).
 
 ## Blockers
 

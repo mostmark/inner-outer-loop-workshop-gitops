@@ -23,7 +23,7 @@ Smoke-test output below is complete and verbatim; bootstrap and cleanup output i
 
 | Repository | Content | Branches |
 |---|---|---|
-| `github.com/mostmark/inner-outer-loop-workshop` | Antora lab guide, `SCREENSHOTS-TODO.md`, Pages preview `https://mostmark.github.io/inner-outer-loop-workshop/` | `main` only |
+| `github.com/mostmark/inner-outer-loop-workshop` | Antora lab guide, Pages preview `https://mostmark.github.io/inner-outer-loop-workshop/` | `main` only |
 | `github.com/mostmark/inner-outer-loop-workshop-gitops` | charts, `argocd/`, `bootstrap.sh`, `cleanup.sh`, `print-user-urls.sh`, `smoke-tests/`, `migration/` | `main` only |
 | `github.com/mostmark/inner-outer-loop-workshop-code` | code, devfile, `.tasks`, pipelines, `tools/` (tooling image) | `main` only |
 
@@ -655,12 +655,11 @@ limiting resource; plan about 13.5 GiB of persistent volume claims per participa
 | Decisions | `migration/DECISIONS.md` |
 | Known issues | `migration/KNOWN-ISSUES.md` |
 | Progress log | `migration/PROGRESS.md` |
-| Screenshot recapture list | `SCREENSHOTS-TODO.md` (content repository) |
 
 ## 9. Remaining manual work
 
-- **Screenshots**: recapture the images listed in `SCREENSHOTS-TODO.md` (content repository) on an
-  OpenShift 4.22 cluster, keeping the file names; P1 images contradict the new text.
+- **Screenshots**: done. The owner recaptured all screenshots on OpenShift 4.22 (2026-09-30), and the
+  recapture list `SCREENSHOTS-TODO.md` was removed.
 - **Event password**: use an event-specific `WORKSHOP_USER_PASSWORD` (KNOWN-ISSUES K17), or a
   credentials file when the users have different passwords, and make sure the passwords in the
   identity provider match (K12).

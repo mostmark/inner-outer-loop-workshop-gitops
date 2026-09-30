@@ -7,7 +7,7 @@ migration are in [MIGRATION.md](MIGRATION.md) and [FINAL-REPORT.md](FINAL-REPORT
 
 | # | Issue | Impact | Workaround / next step |
 |---|---|---|---|
-| K1 | Screenshots still show the old console, Dev Spaces, Argo CD, Kiali and Gitea UIs and old names (`user1devspaces`, `my-project1`, password Secret). | Cosmetic; a few images contradict the new text (marked P1). | Recapture following `SCREENSHOTS-TODO.md` in the content repository. |
+| K1 | Fixed: screenshots showed the old console, Dev Spaces, Argo CD, Kiali and Gitea UIs and old names (`user1devspaces`, `my-project1`, password Secret). | The owner recaptured all screenshots on OpenShift 4.22 (2026-09-30); the recapture list `SCREENSHOTS-TODO.md` was removed. | Recapture outdated images under the same file name (content README, "Screenshots"). |
 | K2 | The catalog service still uses Spring Boot 2.1 (Java 8 source level) and JKube 1.11. It builds and runs on Java 21 and JKube now generates a Deployment, but both are long out of support. | None for the exercises. | Upgrading to Spring Boot 3 changes the Catalog exercise code (`javax` to `jakarta`); out of scope ("modernize only where needed"). |
 | K3 | .NET 9 support ends in November 2026; `dotnet:10.0` is available on OpenShift 4.22. | The Gateway exercise keeps `dotnet:9.0`. | Switch the devfile command, `.tasks` and the guide to `dotnet:10.0` when .NET 9 leaves support. |
 | K4 | The "Fix up the Browser URL" subsection (browsers upgrading plain `http://` app routes to `https://`) depends on the browser. | Participants may not see the problem. | Kept, because Chrome's HTTPS-first mode still does this. |
