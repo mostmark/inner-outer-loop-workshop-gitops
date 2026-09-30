@@ -101,8 +101,9 @@ What participants use:
 During the installation the Job `maven-warmup` (namespace `nexus`) builds the solved inventory
 (Quarkus) and catalog (Spring Boot) services of the code repository through the mirror, so that
 participants' first Maven builds find everything in Nexus instead of downloading about 2,200 files
-from the Internet at the same time. On a fresh cluster this cut the first inventory build from 8 to
-1 minute. A failed warm-up does not stop the installation: the Job logs a warning, and
+from the Internet at the same time. On a fresh cluster this cut a participant's first inventory
+and catalog builds from 9.5 to 1.7 minutes; the warm-up adds about 5 minutes to the installation.
+A failed warm-up does not stop the installation: the Job logs a warning, and
 `smoke-tests/platform-check.sh` reports it. Turn it off with `nexus.warmup.enabled: false` in
 `charts/workshop-platform/values.yaml`.
 

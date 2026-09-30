@@ -287,9 +287,13 @@ start that first build within the same minutes, so the platform chart's Job `mav
 the solved inventory and catalog services of the code repository through Nexus (`clean package`,
 `quarkus:go-offline` for dev mode, JKube `oc:resource`, `dependency:go-offline`), without deploying
 anything. Its local repository covered every artifact that a participant's full inventory and
-catalog run needed. It is a Sync hook in the same wave as `wait-for-platform`, so it runs while
-the operators finish, and it uses the participants' tooling image, so Maven and its settings are
-the same. It clones the code repository instead of copying its build files, so the cache follows
+catalog run needed. It uses the participants' tooling image, so Maven and its settings are the
+same. It is a Sync hook in the same wave as `wait-for-platform`. On a fresh cluster (irma,
+2026-09-30) it took 6 minutes while `wait-for-platform` took 1, so it adds about 5 minutes to an
+installation of about 11; afterwards a participant's first inventory and catalog builds took 1:05
+and 0:31 minutes. A Job that Argo CD does not wait for (started by a hook) was rejected: when
+`bootstrap.sh` finishes, the cache should be filled, and the installation happens well before the
+event. It clones the code repository instead of copying its build files, so the cache follows
 the code. A failure only logs a warning, because a cold cache slows builds down but does not break
 them. Left out on purpose: .NET and npm (they download from the Internet directly, not through
 Nexus, and are fast), the health-probe and configuration steps (they add few artifacts). Builder

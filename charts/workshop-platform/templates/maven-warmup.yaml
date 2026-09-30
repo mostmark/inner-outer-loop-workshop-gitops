@@ -7,8 +7,9 @@
 # inventory build took 8 min (about 2,200 downloads) and the catalog build 1.5 min; with a filled
 # cache 1 min and 0.5 min. Builds the solved inventory-quarkus and catalog-spring-boot services
 # of the code repository through the mirror (no deployment) and resolves Quarkus dev mode.
-# Runs next to wait-for-platform (same wave), so it adds little to the installation time. A
-# failure only leaves the cache cold: the Job logs a warning and succeeds.
+# Runs in the same wave as wait-for-platform. On an empty Nexus it takes about 6 minutes, and the
+# users wave waits for it (docs/decisions.md D23). A failure only leaves the cache cold: the Job
+# logs a warning and succeeds.
 apiVersion: batch/v1
 kind: Job
 metadata:
