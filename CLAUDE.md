@@ -48,6 +48,23 @@ Related repositories (all use only the `main` branch):
 - Record decisions in `migration/DECISIONS.md` and workarounds in `migration/KNOWN-ISSUES.md`
   (with when to remove them), and keep `README.md` in step with behaviour changes.
 
+## What you need
+
+- An OpenShift 4.22 cluster (x86_64) with cluster-admin, a default storage class, the internal image
+  registry, and the participant users in its identity provider (README, "Prerequisites").
+- `oc` logged in as cluster-admin, `helm` for the chart checks, push rights to the repository that
+  Argo CD follows.
+- Sizing and the user passwords are in `README.md`.
+
+## How changes reach users
+
+| Change | Reaches |
+|---|---|
+| push to `main` | every cluster whose root Application follows this repository: Argo CD syncs it (refresh the Application to speed it up) |
+| `bootstrap.sh` | the GitOps operator, the secrets (user passwords) and the root Application's parameters |
+| a changed Job (Sync hook) | runs again on the next sync of its Application |
+| running workspaces | read their environment at start: they get changed values after a restart (the DevWorkspace operator restarts them itself when a mounted ConfigMap or Secret is added) |
+
 ## Checks before committing
 
 - `helm lint` and `helm template` for every chart (and the root chart with its value variants).
@@ -82,6 +99,35 @@ Related repositories (all use only the `main` branch):
   `cn-project-<user>`.
 - Database templates `coolstore-mariadb` / `coolstore-postgresql` in `openshift` (Deployments,
   MariaDB 10.5, PostgreSQL 15); the lab guide and the code repo's solutions depend on them.
+
+## Updating versions
+
+Check new versions on a cluster (`oc get packagemanifest <name> -o yaml`) and keep the dependent
+values in step:
+
+| What | Where | Depends on it |
+|---|---|---|
+| OpenShift GitOps channel | `bootstrap.sh` (`GITOPS_CHANNEL`) | the `argocd` CLI in the code repo's tooling image (`ARGOCD_VERSION`) |
+| Dev Spaces, Pipelines, Service Mesh channels | `charts/workshop-operators/values.yaml` | Pipelines: `TKN_VERSION` in the tooling image |
+| Kiali: channel + `startingCSV` (manual approval, a Job approves exactly that CSV) | `charts/workshop-operators/values.yaml` | `workshopUsers.kialiEditWorkaround` can go with Kiali 2.28+ (KNOWN-ISSUES K19) |
+| Gitea operator: pinned catalog image tag | `charts/workshop-operators/values.yaml` (`catalogSources`) | - |
+| Dev Spaces editor image digests | `charts/workshop-users/values.yaml` (`devspaces.editor`) | copy them from the `che-code.yaml` entry of ConfigMap `editors-definitions` in `openshift-devspaces` after every Dev Spaces minor upgrade |
+| Istio version, Nexus image, Java builder tag, database versions | `charts/workshop-platform/values.yaml` | Java builder tag: the code repo's `s2i-java` `VERSION`; MariaDB version: the inventory service's `db-version` in the lab guide and the code repo |
+| Product versions shown in the lab guide | the lab guide's `content/antora.yml` | - |
+
+Record version changes and anything they break in `migration/KNOWN-ISSUES.md`.
+
+## Customising in a fork
+
+These values point to the original repositories and images; change all of them together with the
+lists in the lab guide and code repositories' `CLAUDE.md`:
+
+- `argocd/application.yaml`: `spec.source.repoURL` and the `source.repoURL` parameter.
+- `bootstrap.sh`: default `REPO_URL` (or pass `--repo`).
+- `charts/workshop/values.yaml`: `source.repoURL`.
+- `charts/lab-guide/values.yaml`: `labGuide.image`.
+- `charts/workshop-users/values.yaml`: `devspaces.devfileURL`, `devspaces.repositoryURL`.
+- `README.md` and this file: repository and image names.
 
 ## Git
 
