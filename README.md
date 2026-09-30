@@ -75,6 +75,7 @@ bootstrap.sh
           ├─ wave 1  workshop-platform    CheCluster, Istio/IstioCNI, Kiali, OSSMConsole, monitoring,
           │                               ArgoCD "argocd", Gitea, Nexus (+ config Job), DB templates,
           │                               cluster-integration Job ─► wait-for-platform Job
+          │                               and maven-warmup Job (fills the Nexus cache)
           └─ wave 2  workshop-users       per user: namespaces, RBAC, AppProject, PodMonitor,
                                           workspace env + editor + DevWorkspace ─► user-setup Job
                                           (Gitea accounts, Argo CD tokens, credential Secrets)
@@ -96,6 +97,14 @@ What participants use:
 | Argo CD (participants, OpenShift login) | `argocd` | `https://argocd-server-argocd.<apps domain>` |
 | Kiali | `istio-system` | `https://kiali-istio-system.<apps domain>` |
 | Maven mirror | `nexus` | `http://nexus.nexus.svc:8081/repository/maven-all-public/` |
+
+During the installation the Job `maven-warmup` (namespace `nexus`) builds the solved inventory
+(Quarkus) and catalog (Spring Boot) services of the code repository through the mirror, so that
+participants' first Maven builds find everything in Nexus instead of downloading about 2,200 files
+from the Internet at the same time. On a fresh cluster this cut the first inventory build from 8 to
+1 minute. A failed warm-up does not stop the installation: the Job logs a warning, and
+`smoke-tests/platform-check.sh` reports it. Turn it off with `nexus.warmup.enabled: false` in
+`charts/workshop-platform/values.yaml`.
 
 The `openshift-gitops` instance is admin-only. Participants have no access to it, to `argocd`,
 `gitea`, `nexus` or any other participant's namespaces (see `smoke-tests/isolation-check.sh`).
@@ -425,8 +434,7 @@ ready-to-use URL of every participant:
 (different ones per user in per-user mode), not through impersonation.
 
 `user-journey.sh` logs in as the participant and runs the devfile commands and the guide's steps
-inside the participant's workspace, for both parts. It takes 30 to 45 minutes on a fresh cluster
-(first Maven downloads fill the Nexus cache).
+inside the participant's workspace, for both parts. It takes 30 to 45 minutes on a fresh cluster.
 
 ## Cleanup
 

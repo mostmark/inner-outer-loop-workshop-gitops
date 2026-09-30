@@ -1,0 +1,80 @@
+{{- if and .Values.nexus.enabled .Values.nexus.warmup.enabled }}
+{{- $n := .Values.nexus }}
+{{- $w := .Values.nexus.warmup }}
+---
+# Fills the Nexus cache with what the Java services of the Inner Loop need, so that participants'
+# first builds don't all download from the Internet at the same time. On an empty Nexus the first
+# inventory build took 8 min (about 2,200 downloads) and the catalog build 1.5 min; with a filled
+# cache 1 min and 0.5 min. Builds the solved inventory-quarkus and catalog-spring-boot services
+# of the code repository through the mirror (no deployment) and resolves Quarkus dev mode.
+# Runs next to wait-for-platform (same wave), so it adds little to the installation time. A
+# failure only leaves the cache cold: the Job logs a warning and succeeds.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: maven-warmup
+  namespace: {{ $n.namespace | quote }}
+  labels:
+    {{- include "workshop.labels" . | nindent 4 }}
+  annotations:
+    argocd.argoproj.io/hook: Sync
+    argocd.argoproj.io/hook-delete-policy: BeforeHookCreation
+    argocd.argoproj.io/sync-wave: "10"
+spec:
+  backoffLimit: 0
+  activeDeadlineSeconds: {{ $w.timeoutSeconds }}
+  template:
+    spec:
+      automountServiceAccountToken: false
+      restartPolicy: Never
+      containers:
+        - name: warmup
+          image: {{ $w.image | quote }}
+          env:
+            - name: MAVEN_MIRROR_URL
+              value: {{ printf "http://%s.%s.svc:8081/repository/%s/" $n.name $n.namespace $n.group | quote }}
+            - name: REPOSITORY_URL
+              value: {{ $w.repositoryURL | quote }}
+            - name: REPOSITORY_REVISION
+              value: {{ $w.repositoryRevision | quote }}
+            - name: HOME
+              value: /work
+            - name: MAVEN_OPTS
+              value: -Xmx1g
+          command: ["/bin/bash", "-c"]
+          args:
+            - |
+              set -uo pipefail
+              mvn_q() { mvn -B -ntp -Dmaven.repo.local=/work/m2 "$@"; }
+              warmup() {
+                until curl -fsS -o /dev/null "$MAVEN_MIRROR_URL"; do echo "Waiting for $MAVEN_MIRROR_URL"; sleep 10; done
+                git clone -q --depth 1 -b "$REPOSITORY_REVISION" "$REPOSITORY_URL" /work/code || return 1
+                cd /work/code || return 1
+                .tasks/solutions/inventory-quarkus/solve.sh && .tasks/solutions/catalog-spring-boot/solve.sh || return 1
+                echo "== inventory-quarkus"
+                (cd labs/inventory-quarkus && mvn_q clean package -DskipTests && mvn_q quarkus:go-offline) || return 1
+                echo "== catalog-spring-boot"
+                (cd labs/catalog-spring-boot && mvn_q clean package -DskipTests oc:resource && mvn_q dependency:go-offline) || return 1
+              }
+              SECONDS=0
+              for attempt in 1 2; do
+                if (warmup); then
+                  echo "Maven cache warmed up in ${SECONDS}s ($(find /work/m2 -type f | wc -l) files)"
+                  exit 0
+                fi
+                echo "Attempt $attempt failed"; rm -rf /work/code; sleep 30
+              done
+              echo "WARNING: Maven warm-up failed; participants' first builds download from the Internet."
+          resources:
+            requests:
+              cpu: 500m
+              memory: 1Gi
+            limits:
+              memory: 2Gi
+          volumeMounts:
+            - name: work
+              mountPath: /work
+      volumes:
+        - name: work
+          emptyDir: {}
+{{- end }}

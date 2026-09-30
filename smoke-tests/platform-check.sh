@@ -76,6 +76,10 @@ check_http "Argo CD login page"   "https://argocd-server-argocd.${DOMAIN}/auth/l
 check_http "Kiali"                "https://kiali-istio-system.${DOMAIN}/"                                               200
 check "Nexus Maven group readable anonymously" in_cluster_http \
   "http://nexus.nexus.svc:8081/repository/maven-all-public/org/apache/maven/plugins/maven-clean-plugin/maven-metadata.xml" 200
+# The warm-up Job succeeds even when it fails (a cold cache only slows builds down), so check its log.
+if oc get job maven-warmup -n nexus >/dev/null 2>&1; then
+  check "Nexus cache warmed up (Job maven-warmup)" bash -c "oc logs job/maven-warmup -n nexus | grep -q 'Maven cache warmed up'"
+fi
 
 section "Per-user resources"
 # Kiali before 2.28 checks edit permissions with the kind name ("VirtualService"); the users chart

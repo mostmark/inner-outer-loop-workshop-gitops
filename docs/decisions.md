@@ -277,3 +277,22 @@ deletes them. It is a cluster-wide change, acceptable for a dedicated workshop c
 reversible (switch in the chart; `cleanup.sh` restores them). Argo CD applies only the
 `skippedTemplates` field of the operator-owned `Config` (server-side apply) and never deletes the
 object. As a second line of defence the guide and the cleanup work with either template.
+
+## D23. Filling the Nexus cache during the installation
+
+On a fresh cluster the first inventory build (Quarkus) took 8 minutes, 5 of them for about 2,200
+Maven downloads through an empty Nexus, and the catalog build (Spring Boot, JKube) 1.5 minutes.
+With a filled cache the same builds took 1 minute and 0.5 minutes. In a workshop, many participants
+start that first build within the same minutes, so the platform chart's Job `maven-warmup` builds
+the solved inventory and catalog services of the code repository through Nexus (`clean package`,
+`quarkus:go-offline` for dev mode, JKube `oc:resource`, `dependency:go-offline`), without deploying
+anything. Its local repository covered every artifact that a participant's full inventory and
+catalog run needed. It is a Sync hook in the same wave as `wait-for-platform`, so it runs while
+the operators finish, and it uses the participants' tooling image, so Maven and its settings are
+the same. It clones the code repository instead of copying its build files, so the cache follows
+the code. A failure only logs a warning, because a cold cache slows builds down but does not break
+them. Left out on purpose: .NET and npm (they download from the Internet directly, not through
+Nexus, and are fast), the health-probe and configuration steps (they add few artifacts). Builder
+images are not pre-pulled on the nodes: OpenShift build pods keep their container storage in an
+`emptyDir`, so every build pulls its builder image again (about 5 seconds), cached on the node or
+not.

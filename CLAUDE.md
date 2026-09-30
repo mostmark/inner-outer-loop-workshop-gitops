@@ -27,7 +27,7 @@ Related repositories (all use only the `main` branch):
 | `cleanup.sh` | removes the workshop and every cluster-wide change, then verifies the end state |
 | `print-user-urls.sh`, `set-guide-part.sh`, `lib/credentials.sh` | participant URLs, lab guide part, user passwords |
 | `smoke-tests/` | `platform-check.sh`, `isolation-check.sh`, `user-journey.sh`, `footprint.sh` |
-| `tools/` | source of the participants' tooling image `quay.io/mostmark/workshop-tools:latest` (`Containerfile`, `build-push.sh`, `etc/` with `.bashrc`, Maven settings, entrypoint) |
+| `tools/` | source of the participants' tooling image `quay.io/mostmark/workshop-tools:latest` (`Containerfile`, `build-push.sh`, `etc/` with `.bashrc`, Maven settings, entrypoint); the Maven warm-up Job uses it too |
 | `docs/` | `known-issues.md` (workarounds, when to remove them), `decisions.md` (why things are built this way), `origin.md` (sources and migration record, attribution) |
 
 ## Rules
@@ -84,6 +84,7 @@ Related repositories (all use only the `main` branch):
 | `workshopUsers.kialiEditWorkaround` | `true` | Role that lets participants edit Istio config in Kiali 2.27 (docs/known-issues.md K19); remove with Kiali 2.28+ |
 | `databaseTemplates.hideSampleTemplates` (platform) | `true` | hides OpenShift's sample MariaDB/PostgreSQL templates (K20) |
 | `devspaces.prestartWorkspaces` (users) | `true` | starts each participant's workspace |
+| `nexus.warmup.enabled` (platform) | `true` | Job `maven-warmup` fills the Nexus cache with the Java builds of the code repo (docs/decisions.md D23) |
 
 ## Names and contracts shared with the other repositories
 
@@ -131,6 +132,7 @@ list in the lab guide repository's `CLAUDE.md` and the code repository's list be
 - `charts/workshop/values.yaml`: `source.repoURL`.
 - `charts/lab-guide/values.yaml`: `labGuide.image`.
 - `charts/workshop-users/values.yaml`: `devspaces.devfileURL`, `devspaces.repositoryURL`.
+- `charts/workshop-platform/values.yaml`: `nexus.warmup.image`, `nexus.warmup.repositoryURL`.
 - `tools/build-push.sh` (run it with your `QUAY_USER`), the header and source label in
   `tools/Containerfile`, and `tools/README.md`.
 - `README.md` and this file: repository and image names.
@@ -166,6 +168,11 @@ Rules:
   `s2i-nodejs`, `s2i-dotnet`, `openshift-client`; param `CONTEXT`).
 - Service Mesh 3: `networking.istio.io/v1`; per-user gateway label `istio: ingressgateway-<user>`.
 - Default Git branch everywhere: `main` (`git init -b main`).
+- The platform chart's `maven-warmup` Job runs `.tasks/solutions/inventory-quarkus/solve.sh` and
+  `.tasks/solutions/catalog-spring-boot/solve.sh`, then builds `labs/inventory-quarkus` and
+  `labs/catalog-spring-boot` (`templates/maven-warmup.yaml`). Moving or renaming these, or adding a
+  Java service, needs the matching change there. After changing Maven dependencies on a running
+  workshop, sync the platform Application to fill the cache again.
 - Framework versions are in each service's build file (for example `quarkus.platform.version` in
   `labs/inventory-quarkus/pom.xml`); the lab guide shows some of these files, so check its text too.
 

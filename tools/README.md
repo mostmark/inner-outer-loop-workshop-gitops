@@ -3,7 +3,8 @@
 Tooling container for the OpenShift Dev Spaces workspace of the Inner & Outer Loop workshop.
 The `workshop-tools` component of the participants' devfile
 ([inner-outer-loop-workshop-code](https://github.com/mostmark/inner-outer-loop-workshop-code),
-`devfile.yaml`) uses it as `quay.io/mostmark/workshop-tools:latest`.
+`devfile.yaml`) uses it as `quay.io/mostmark/workshop-tools:latest`. The Maven warm-up Job of the
+workshop platform chart (`charts/workshop-platform/templates/maven-warmup.yaml`) uses it as well.
 
 ## Contents
 

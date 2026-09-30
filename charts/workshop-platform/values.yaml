@@ -91,6 +91,14 @@ nexus:
     - name: jboss
       url: https://repository.jboss.org/nexus/content/groups/public/
   group: maven-all-public
+  # Fills the cache during the installation by building the Java services of the code repository
+  # (templates/maven-warmup.yaml). Without it, the first participants' builds download everything.
+  warmup:
+    enabled: true
+    image: quay.io/mostmark/workshop-tools:latest
+    repositoryURL: https://github.com/mostmark/inner-outer-loop-workshop-code.git
+    repositoryRevision: main
+    timeoutSeconds: 1800
 
 pipelines:
   # The openshift-pipelines s2i-java Task builds from openshift/java:<VERSION>. OpenShift 4.22
