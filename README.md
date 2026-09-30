@@ -29,7 +29,7 @@ oc login <api-url>                                        # as cluster-admin
 
 export WORKSHOP_USER_PASSWORD='<password of the users>'   # shared password, or see below
 ./bootstrap.sh --users 20                                 # install the workshop for 20 users
-./print-user-urls.sh                                      # one lab guide link per participant
+./print-user-urls.sh                                      # prints url to lab guides
 ```
 
 `bootstrap.sh` takes about 10 minutes and waits until everything is ready; the participants'
