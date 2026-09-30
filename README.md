@@ -14,6 +14,8 @@ Part 2 Outer Loop) with OpenShift GitOps. They manage:
 The lab guide lives in [inner-outer-loop-workshop](https://github.com/mostmark/inner-outer-loop-workshop)
 and the example code in [inner-outer-loop-workshop-code](https://github.com/mostmark/inner-outer-loop-workshop-code).
 
+![Inner and Outer Loop](images/inner-outer-loop.png)
+
 ## Repository Layout
 
 ```text
@@ -28,6 +30,7 @@ and the example code in [inner-outer-loop-workshop-code](https://github.com/most
 │   └── lab-guide/                # lab guide deployment and URL template
 ├── bootstrap.sh                  # the only imperative step
 ├── cleanup.sh                    # removes the workshop
+├── images/                       # images used in this README
 ├── lib/credentials.sh            # user passwords (shared or per user), used by the scripts
 ├── print-user-urls.sh            # prints each participant's lab guide URL
 ├── set-guide-part.sh             # shows Part 1, Part 2 or both in the lab guide
