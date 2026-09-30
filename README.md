@@ -16,6 +16,26 @@ and the example code in [inner-outer-loop-workshop-code](https://github.com/most
 
 ![Inner and Outer Loop](images/inner-outer-loop.png)
 
+## Quick Start
+
+You need an OpenShift 4.22 cluster (x86_64) with cluster-admin access, a default storage class
+and the internal image registry, and the participant users already in its identity provider
+(see [Prerequisites](#prerequisites) and [Sizing](#sizing)).
+
+```bash
+git clone https://github.com/mostmark/inner-outer-loop-workshop-gitops.git
+cd inner-outer-loop-workshop-gitops
+oc login <api-url>                                        # as cluster-admin
+
+export WORKSHOP_USER_PASSWORD='<password of the users>'   # shared password, or see below
+./bootstrap.sh --users 20                                 # about 10 minutes, waits until ready
+./print-user-urls.sh                                      # one lab guide link per participant
+```
+
+- Users with their own passwords: pass `--credentials-file users.csv` to `bootstrap.sh` instead of
+  setting `WORKSHOP_USER_PASSWORD` ([User Passwords](#user-passwords)).
+- Remove the workshop afterwards: `./cleanup.sh` ([Cleanup](#cleanup)).
+
 ## Repository Layout
 
 ```text
