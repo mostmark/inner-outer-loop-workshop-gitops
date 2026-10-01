@@ -14,6 +14,8 @@ Part 2 Outer Loop) with OpenShift GitOps. They manage:
 The lab guide lives in [inner-outer-loop-workshop](https://github.com/mostmark/inner-outer-loop-workshop)
 and the example code in [inner-outer-loop-workshop-code](https://github.com/mostmark/inner-outer-loop-workshop-code).
 
+Based on the Red Hat End-to-End Developer Workshop; see [Credits](#credits).
+
 ![Inner and Outer Loop](images/inner-outer-loop.png)
 
 ## Quick Start
@@ -485,3 +487,20 @@ helm lint charts/workshop-users --set 'users.explicitNames={alice,bob}'
 | `cleanup.sh` waits for namespaces | A finalizer is stuck; `oc get <kind> -n <namespace>` for the objects listed. Operators must still be running while their objects are deleted, which is why the operator namespaces are kept until the end. |
 
 More: [docs/known-issues.md](docs/known-issues.md).
+
+## Credits
+
+This workshop builds on the Red Hat
+[**End-to-End Developer Workshop**](https://github.com/RedHat-EMEA-SSA-Team/end-to-end-developer-workshop)
+(Inner Loop and Outer Loop), created by the Red Hat EMEA Solution Architects team and published
+through Red Hat Scholars. The exercises, the Coolstore example application and the learning path
+come from that workshop.
+
+The main change is how it is delivered: the original was provisioned by a dedicated Kubernetes
+operator, [`workshop-operator`](https://github.com/RedHat-EMEA-SSA-Team/workshop-operator). This
+version installs the same environment declaratively with OpenShift GitOps (Argo CD) and Helm. It
+also brings the content up to date with OpenShift 4.22 and current operators (for example Service
+Mesh 3, Deployments instead of DeploymentConfigs, Tekton tasks via resolvers), and combines the
+two lab guides into one.
+
+The sources and a record of the migration are in [docs/origin.md](docs/origin.md).
