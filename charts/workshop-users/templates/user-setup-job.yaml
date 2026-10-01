@@ -156,6 +156,8 @@ data:
 #     dashboard, and without CHE_DASHBOARD_URL the editor cannot open terminals (its Che API
 #     extension passes DASHBOARD_URL=undefined to every terminal, which makes VS Code fail).
 #     The Job reads the URLs from the CheCluster status, so the charts need no cluster domain.
+#     CHE_DASHBOARD_URL is the bare origin, as the dashboard sets it (window.location.origin): the
+#     editor appends /dashboard/... itself, for example for "Restart Workspace" (K22).
 # The Job is idempotent: existing valid tokens are kept.
 apiVersion: batch/v1
 kind: Job
@@ -253,7 +255,7 @@ spec:
               done
               [ -n "$CHE_URL" ] || { echo "No cheURL in the CheCluster status of $DEVSPACES_NAMESPACE" >&2; exit 1; }
               PLUGIN_REGISTRY_URL=$(oc get checlusters.org.eclipse.che -n "$DEVSPACES_NAMESPACE" -o jsonpath='{.items[0].status.pluginRegistryURL}')
-              DEVSPACES_ENV="CHE_DASHBOARD_URL=${CHE_URL%/}/dashboard/"
+              DEVSPACES_ENV="CHE_DASHBOARD_URL=${CHE_URL%/}"
               if [ -n "$PLUGIN_REGISTRY_URL" ]; then
                 DEVSPACES_ENV="$DEVSPACES_ENV CHE_PLUGIN_REGISTRY_URL=$PLUGIN_REGISTRY_URL CHE_PLUGIN_REGISTRY_INTERNAL_URL=http://plugin-registry.${DEVSPACES_NAMESPACE}.svc:8080/v3"
               fi
