@@ -33,6 +33,12 @@ spec:
     secondsOfRunBeforeIdling: {{ $ds.secondsOfRunBeforeIdling }}
     startTimeoutSeconds: {{ $ds.startTimeoutSeconds }}
     disableContainerBuildCapabilities: {{ $ds.disableContainerBuildCapabilities }}
+    {{- with $ds.fsGroupChangePolicy }}
+    # The fsGroup itself comes from the namespace's SCC range, as without this setting.
+    security:
+      podSecurityContext:
+        fsGroupChangePolicy: {{ . | quote }}
+    {{- end }}
     storage:
       pvcStrategy: {{ $ds.storage.pvcStrategy | quote }}
       perUserStrategyPvcConfig:

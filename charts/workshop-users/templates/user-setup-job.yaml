@@ -304,6 +304,25 @@ spec:
                   '{"controller.devfile.io/mount-to-devworkspace":"true","controller.devfile.io/watch-configmap":"true"}' \
                   '{"controller.devfile.io/mount-as":"env"}' \
                   $DEVSPACES_ENV
+                # Dev Spaces user profile, as Dev Spaces creates it on the user's first login. Created
+                # here so that the pre-started workspace already mounts it; otherwise the first login
+                # adds the mount and restarts the workspace (docs/known-issues.md K21). Created only
+                # when missing: Dev Spaces fills in the user's ID at login, which must stay.
+                if ! oc get secret user-profile -n "devspaces-$user" >/dev/null 2>&1; then
+                  python3 - "devspaces-$user" "$user" <<'PY' | oc create -f - >/dev/null
+              import json, sys
+              ns, user = sys.argv[1:]
+              print(json.dumps({"apiVersion": "v1", "kind": "Secret", "type": "Opaque",
+                "metadata": {"name": "user-profile", "namespace": ns,
+                  "labels": {"app.kubernetes.io/part-of": "che.eclipse.org",
+                             "controller.devfile.io/mount-to-devworkspace": "true",
+                             "controller.devfile.io/watch-secret": "true"},
+                  "annotations": {"controller.devfile.io/mount-as": "file",
+                                  "controller.devfile.io/mount-path": "/config/user/profile"}},
+                "stringData": {"id": "", "name": user, "email": user + "@che"}}))
+              PY
+                  echo "  Dev Spaces user profile created"
+                fi
                 echo "  secrets and workspace environment written"
               done
               echo "All users are set up"

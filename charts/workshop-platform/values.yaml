@@ -27,6 +27,10 @@ devspaces:
     claimSize: 10Gi
   # The labs build images on the cluster (S2I/Tekton), not inside the workspace.
   disableContainerBuildCapabilities: true
+  # OnRootMismatch: a workspace start skips setting the group of every file on the workspace
+  # volume when the volume's top folder is already right. With the Kubernetes default (Always) the
+  # walk took 1.5-2.25 min per start on a slow cluster. Empty: Kubernetes default.
+  fsGroupChangePolicy: OnRootMismatch
 
 serviceMesh:
   enabled: true

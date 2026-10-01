@@ -84,6 +84,7 @@ Related repositories (all use only the `main` branch):
 | `workshopUsers.kialiEditWorkaround` | `true` | Role that lets participants edit Istio config in Kiali 2.27 (docs/known-issues.md K19); remove with Kiali 2.28+ |
 | `databaseTemplates.hideSampleTemplates` (platform) | `true` | hides OpenShift's sample MariaDB/PostgreSQL templates (K20) |
 | `devspaces.prestartWorkspaces` (users) | `true` | starts each participant's workspace |
+| `devspaces.fsGroupChangePolicy` (platform) | `OnRootMismatch` | workspace starts skip setting the group of every file on the volume (docs/known-issues.md K21) |
 | `nexus.warmup.enabled` (platform) | `true` | Job `maven-warmup` fills the Nexus cache with the Java builds of the code repo (docs/decisions.md D23) |
 
 ## Names and contracts shared with the other repositories
