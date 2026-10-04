@@ -14,6 +14,10 @@ Part 2 Outer Loop) with OpenShift GitOps. They manage:
 The lab guide lives in [inner-outer-loop-workshop](https://github.com/mostmark/inner-outer-loop-workshop)
 and the example code in [inner-outer-loop-workshop-code](https://github.com/mostmark/inner-outer-loop-workshop-code).
 
+To run the workshop in your own organisation with your own branding, chapters, code or operators,
+follow the hands-on tutorials
+[Customising the Inner & Outer Loop Workshop](https://mostmark.github.io/inner-outer-loop-workshop-customising/).
+
 Based on the Red Hat End-to-End Developer Workshop; see [Credits](#credits).
 
 ![Inner and Outer Loop](images/inner-outer-loop.png)
