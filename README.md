@@ -484,6 +484,7 @@ helm lint charts/workshop-users --set 'users.explicitNames={alice,bob}'
 | Devfile commands or `git push` fail with authentication errors after a password change | The workspace still has the old password; restart it (see [User Passwords](#user-passwords)). |
 | Participant cannot see their Applications in Argo CD | They must use "LOG IN VIA OPENSHIFT" with their workshop user; Applications must be in project `cn-project-<user>`. |
 | The lab guide still shows the old part after `set-guide-part.sh` | Check `oc get deployment lab-guide -n lab-guide -o yaml` for `WORKSHOP_PART`, and whether the root Application is Synced. Browsers may show a cached page; reload it. |
+| `cleanup.sh` waits for the workshop Applications | A finished hook Job still carries Argo CD's hook finalizer (known issue K23; `cleanup.sh` removes it before it starts). Find it with `oc get jobs -A -o custom-columns=NS:.metadata.namespace,NAME:.metadata.name,FIN:.metadata.finalizers \| grep hook-finalizer` and remove it: `oc patch job <name> -n <namespace> --type merge -p '{"metadata":{"finalizers":null}}'`. |
 | `cleanup.sh` waits for namespaces | A finalizer is stuck; `oc get <kind> -n <namespace>` for the objects listed. Operators must still be running while their objects are deleted, which is why the operator namespaces are kept until the end. |
 
 More: [docs/known-issues.md](docs/known-issues.md).

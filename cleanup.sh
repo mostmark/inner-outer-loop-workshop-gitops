@@ -101,6 +101,16 @@ drain() {
 # ---------------------------------------------------------------------------------------------
 # 1. GitOps cleanup: delete the root Application
 # ---------------------------------------------------------------------------------------------
+# Argo CD can leave its hook finalizer on a finished hook Job (seen after a child Application
+# synced on its own on a running workshop). Such a Job is never deleted, and the Application's
+# deletion waits for it forever (docs/known-issues.md K23). The workshop is being removed, so the
+# finalizer goes first. These Jobs carry no other finalizers.
+for job in $(oc get jobs -A -l app.kubernetes.io/part-of=inner-outer-loop-workshop --no-headers \
+    -o custom-columns=NS:.metadata.namespace,NAME:.metadata.name,FIN:.metadata.finalizers 2>/dev/null \
+    | awk '$3 ~ /argocd\.argoproj\.io\/hook-finalizer/ {print $1 "/" $2}'); do
+  oc patch job "${job#*/}" -n "${job%%/*}" --type merge -p '{"metadata":{"finalizers":null}}' >/dev/null \
+    && log "Removed the Argo CD hook finalizer from Job ${job}"
+done
 if oc get application "$ROOT_APP" -n "$GITOPS_NAMESPACE" >/dev/null 2>&1; then
   log "Deleting the root Application ${ROOT_APP} (Argo CD prunes everything it manages)"
   oc delete application "$ROOT_APP" -n "$GITOPS_NAMESPACE" --wait=false
