@@ -5,7 +5,7 @@
 # This is the only imperative step. It:
 #   1. installs the OpenShift GitOps operator (pinned channel) and waits for it,
 #   2. gives the provisioning Argo CD instance (openshift-gitops) the permissions and the
-#      Application health check the charts need,
+#      Application and Subscription health checks the charts need,
 #   3. creates the secrets that must not live in Git,
 #   4. applies the root Application (app-of-apps) and waits until everything is Synced and Healthy,
 #   5. prints the lab guide URL template.
@@ -217,7 +217,12 @@ EOF
 # not wait for one child Application before starting the next sync wave. This check reports a
 # child as Healthy only when it is Synced, Healthy and its last sync operation (including the
 # readiness hook Jobs) succeeded.
-log "Configuring the Application health check on the ${GITOPS_NAMESPACE} Argo CD instance"
+# Argo CD's built-in check reports a Subscription as Progressing while a newer version waits for
+# approval. With Manual approval (Kiali is pinned to one CSV) that is permanent once the catalog
+# has a newer version, and the operators wave would never finish (docs/known-issues.md K24). The
+# Subscription check reports Healthy once the operator is installed and nothing but such an
+# upgrade is pending; the readiness Job wait-for-operators still checks every CSV.
+log "Configuring the Application and Subscription health checks on the ${GITOPS_NAMESPACE} Argo CD instance"
 oc patch argocd openshift-gitops -n "$GITOPS_NAMESPACE" --type merge -p "$(cat <<'EOF'
 {
   "spec": {
@@ -226,6 +231,11 @@ oc patch argocd openshift-gitops -n "$GITOPS_NAMESPACE" --type merge -p "$(cat <
         "group": "argoproj.io",
         "kind": "Application",
         "check": "hs = {}\nhs.status = \"Progressing\"\nhs.message = \"\"\nif obj.status ~= nil then\n  local health = nil\n  local sync = nil\n  local phase = nil\n  if obj.status.health ~= nil then health = obj.status.health.status end\n  if obj.status.sync ~= nil then sync = obj.status.sync.status end\n  if obj.status.operationState ~= nil then phase = obj.status.operationState.phase end\n  if health == \"Healthy\" and sync == \"Synced\" and (phase == nil or phase == \"Succeeded\") then\n    hs.status = \"Healthy\"\n    hs.message = \"Synced and Healthy\"\n  else\n    hs.message = \"health=\" .. tostring(health) .. \" sync=\" .. tostring(sync) .. \" operation=\" .. tostring(phase)\n  end\nend\nreturn hs\n"
+      },
+      {
+        "group": "operators.coreos.com",
+        "kind": "Subscription",
+        "check": "hs = {}\nhs.status = \"Progressing\"\nhs.message = \"Waiting for the operator to be installed\"\nif obj.status ~= nil then\n  local installed = obj.status.installedCSV\n  local state = obj.status.state\n  local manual = obj.spec ~= nil and obj.spec.installPlanApproval == \"Manual\"\n  if installed ~= nil and installed ~= \"\" and (state == \"AtLatestKnown\" or (state == \"UpgradePending\" and manual)) then\n    hs.status = \"Healthy\"\n    if state == \"UpgradePending\" then\n      hs.message = installed .. \" installed; a newer version waits for manual approval\"\n    else\n      hs.message = installed .. \" installed\"\n    end\n  else\n    hs.message = \"installedCSV=\" .. tostring(installed) .. \" state=\" .. tostring(state)\n  end\nend\nreturn hs\n"
       }
     ]
   }
